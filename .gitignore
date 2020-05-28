@@ -1,0 +1,6 @@
+.secret
+.idea
+build
+build/*
+build/*/*
+node_modules/*

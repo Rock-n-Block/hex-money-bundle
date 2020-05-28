@@ -1,0 +1,22 @@
+{
+  "name": "hxy-exchange",
+  "version": "1.0.0",
+  "main": "index.js",
+  "author": "Euphemia Deathridge <ephdtrg@mintyclouds.in>",
+  "license": "MIT",
+  "scripts": {
+    "test": "truffle test --network ganache"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^3.0.1",
+    "@openzeppelin/test-helpers": "^0.5.5",
+    "@truffle/hdwallet-provider": "^1.0.35",
+    "bn.js": "^5.1.2",
+    "chai": "^4.2.0",
+    "chai-as-promised": "^7.1.1",
+    "chai-bn": "^0.2.1",
+    "fs": "^0.0.1-security",
+    "ganache-core": "^2.10.2",
+    "truffle": "^5.1.27"
+  }
+}
