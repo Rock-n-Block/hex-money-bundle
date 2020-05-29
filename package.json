@@ -5,7 +5,11 @@
   "author": "Euphemia Deathridge <ephdtrg@mintyclouds.in>",
   "license": "MIT",
   "scripts": {
-    "test": "truffle test --network ganache"
+    "test": "truffle test --network ganache",
+    "compile": "truffle compile",
+    "deploy-ropsten": "truffle migrate --reset --network ropsten",
+    "deploy-kovan": "truffle migrate --reset --network kovan",
+    "clean": "rm -rf build/"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^3.0.1",
