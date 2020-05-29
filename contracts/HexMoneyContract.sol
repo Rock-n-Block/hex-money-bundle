@@ -36,6 +36,8 @@ contract HexMoneyContract is ReentrancyGuard, HexMoneySettings {
         require(address(newHxyToken) != address(0x0), "hxy token address should not be empty");
         hexToken = newHexToken;
         hxyToken = newHxyToken;
+
+        _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
     }
 
     function getMinHexAmount() public view returns (uint256) {
