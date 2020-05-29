@@ -4,6 +4,7 @@ pragma solidity ^0.6.2;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/math/SafeMath.sol";
 //import "./token/ERC20/ERC20.sol";
 import "./token/ERC20.sol";
 import "./token/HXY.sol";
@@ -19,8 +20,8 @@ contract HexMoneyContract is AccessControl, ReentrancyGuard, HexMoneySettings {
     HexWhitelist internal whitelist;
 
     uint256 internal hexDecimals = 10 ** 8;
-    uint256 internal minHexAmount = 10 ** 3 * hexDecimals;
-    uint256 internal maxHexAmount = 10 ** 9 * hexDecimals;
+    uint256 internal minHexAmount = SafeMath.mul(10 ** 3, hexDecimals);
+    uint256 internal maxHexAmount = SafeMath.mul(10 ** 9, hexDecimals);
 
     uint256 internal hexDividendsPercentage = 20;
 
@@ -71,11 +72,11 @@ contract HexMoneyContract is AccessControl, ReentrancyGuard, HexMoneySettings {
     }
 
     function claimDividends() public {
-        uint256 dailyDividendsAmount = dividends.previousDayTokens / hexDividendsPercentage;
+        uint256 dailyDividendsAmount = SafeMath.div(dividends.previousDayTokens, hexDividendsPercentage);
         uint256 userFrozenBalance = HXY(hxyToken).freezingBalanceOf(msg.sender);
         require(userFrozenBalance != 0, "must be freezed amount of HXY to claim dividends");
 
-        uint256 amount = dailyDividendsAmount / userFrozenBalance;
+        uint256 amount = SafeMath.div(dailyDividendsAmount,userFrozenBalance);
         require(IERC20(hexToken).transferFrom(address(this), msg.sender, amount), "fail in transfer dividends");
     }
 
@@ -88,12 +89,12 @@ contract HexMoneyContract is AccessControl, ReentrancyGuard, HexMoneySettings {
 
     function setMinHexAmount(uint256 newAmount) public {
         require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Must have admin role to setup");
-        minHexAmount = newAmount * hexDecimals;
+        minHexAmount = SafeMath.mul(newAmount, hexDecimals);
     }
 
     function setMaxHexAmount(uint256 newAmount) public {
         require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Must have admin role to setup");
-        maxHexAmount = newAmount * hexDecimals;
+        maxHexAmount = SafeMath.mul(newAmount, hexDecimals);
     }
 
     function setWhitelist(address newWhitelistAddress) public {
@@ -116,11 +117,11 @@ contract HexMoneyContract is AccessControl, ReentrancyGuard, HexMoneySettings {
 
     function _recordDividends(uint256 amount) internal {
         if (block.timestamp > dividends.recordTime) {
-            dividends.recordTime += secondsInDay;
+            dividends.recordTime = SafeMath.add(dividends.recordTime, secondsInDay);
             dividends.previousDayTokens = dividends.currentDayTokens;
             dividends.currentDayTokens = 0;
         }
 
-        dividends.currentDayTokens += amount;
+        dividends.currentDayTokens = SafeMath.add(dividends.currentDayTokens, amount);
     }
 }

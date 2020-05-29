@@ -2,6 +2,7 @@ pragma solidity ^0.6.2;
 
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/math/SafeMath.sol";
 import "./ERC20FreezableCapped.sol";
 import "../WhitelistLib.sol";
 import "../HexWhitelist.sol";
@@ -11,12 +12,12 @@ contract HXY is AccessControl, ERC20FreezableCapped, HexMoneySettings {
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     bytes32 public constant EXCHANGE_ROLE = keccak256("EXCHANGE_ROLE");
 
-    HexWhitelist public whitelist;
+    HexWhitelist internal whitelist;
 
     using WhitelistLib for WhitelistLib.AllowedAddress;
 
-    address public teamAddress;
-    uint256 internal teamSupply = 12 * 10 ** 14;
+    address internal teamAddress;
+    uint256 internal teamSupply = SafeMath.mul(12, 10 ** 14);
     uint256 internal totalFrozen;
 
     uint256 internal totalHxyMinted;
@@ -31,7 +32,7 @@ contract HXY is AccessControl, ERC20FreezableCapped, HexMoneySettings {
     uint256 internal currentHxyRoundRate = 1000;
 
     constructor(address account)
-    ERC20FreezableCapped(60 * 10 ** 14)        // 60,000,000
+    ERC20FreezableCapped(SafeMath.mul(60,  10 ** 14))        // 60,000,000
     ERC20("HXY", "HXY")
     public
     {
@@ -67,6 +68,14 @@ contract HXY is AccessControl, ERC20FreezableCapped, HexMoneySettings {
         return address(whitelist);
     }
 
+    function getTeamAddress() public view returns (address) {
+        return teamAddress;
+    }
+
+    function getTeamSupply() public view returns (uint256) {
+        return teamSupply;
+    }
+
     function setExchange(address newExchangeAddress) public {
         require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Must have admin role to setup");
         require(newExchangeAddress != address(0x0), "Invalid exchange address");
@@ -81,7 +90,7 @@ contract HXY is AccessControl, ERC20FreezableCapped, HexMoneySettings {
 
     function mintFromExchange(address account, uint256 hexAmount) public {
         require(hasRole(EXCHANGE_ROLE, _msgSender()), "Must be executed from exchange");
-        uint256 hxyAmount = hexAmount / currentHxyRoundRate;
+        uint256 hxyAmount = SafeMath.div(hexAmount, currentHxyRoundRate);
         mint(account, hxyAmount);
     }
 
@@ -95,7 +104,7 @@ contract HXY is AccessControl, ERC20FreezableCapped, HexMoneySettings {
             uint256 lockPeriod = whitelist.getDappLockPeriod(dappAddress);
             uint256 freezeUntil = _daysToTimestamp(lockPeriod);
             _mintAndFreezeTo(account, amount, freezeUntil);
-            totalFrozen += amount;
+            totalFrozen = SafeMath.add(totalFrozen, amount);
         }
     }
 
@@ -111,7 +120,7 @@ contract HXY is AccessControl, ERC20FreezableCapped, HexMoneySettings {
 
         uint256 freezeUntil = _daysToTimestamp(lockDays);
         _freezeTo(msg.sender, lockAmount, freezeUntil);
-        totalFrozen += lockAmount;
+        totalFrozen = SafeMath.add(totalFrozen, lockAmount);
     }
 
     function releaseFrozen() public {
@@ -120,8 +129,8 @@ contract HXY is AccessControl, ERC20FreezableCapped, HexMoneySettings {
         require(block.timestamp > lockDate, "minimum period not exceeded");
 
         uint256 freezingStart = getLatestFreezingStart(msg.sender);
-        uint256 lockDays = (lockDate - freezingStart) / secondsInDay;
-        uint256 interestAmount = (frozenTokens / 1000) * lockDays;
+        uint256 lockDays = SafeMath.div(SafeMath.sub(lockDate, freezingStart), secondsInDay);
+        uint256 interestAmount = SafeMath.mul(SafeMath.div(frozenTokens, 1000), lockDays);
 
         _releaseOnce();
         mint(msg.sender, interestAmount);
@@ -148,7 +157,7 @@ contract HXY is AccessControl, ERC20FreezableCapped, HexMoneySettings {
     }
 
     function _recordMintedTokens(uint256 hxyAmount) internal {
-        totalHxyMinted += hxyAmount;
+        totalHxyMinted = SafeMath.add(totalHxyMinted, hxyAmount);
 
         if (currentHxyRound < maxHxyRounds) {
             if (totalHxyMinted + hxyAmount >= getRemainingHxyInRound()) {
@@ -159,14 +168,14 @@ contract HXY is AccessControl, ERC20FreezableCapped, HexMoneySettings {
 
     function incrementHxyRateRound() internal returns (bool) {
         currentHxyRound++;
-        currentHxyRoundRate = hxyRoundBaseRate[currentHxyRound] * baseHexToHxyRate;
+        currentHxyRoundRate = SafeMath.mul(hxyRoundBaseRate[currentHxyRound], baseHexToHxyRate);
         return true;
     }
 
 
 
     function _daysToTimestamp(uint256 lockDays) internal view returns(uint256) {
-        return block.timestamp + (lockDays * secondsInDay);
+        return SafeMath.add(block.timestamp, SafeMath.mul(lockDays, secondsInDay));
     }
 
 
