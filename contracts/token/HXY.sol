@@ -9,12 +9,11 @@ import "../HexWhitelist.sol";
 import "../HexMoneySettings.sol";
 
 contract HXY is ERC20FreezableCapped, HexMoneySettings {
-    bytes32 public constant TEAM_ROLE = keccak256("TEAM_ROLE");
     bytes32 public constant EXCHANGE_ROLE = keccak256("EXCHANGE_ROLE");
 
     using WhitelistLib for WhitelistLib.AllowedAddress;
 
-    address internal teamAddress;
+
     uint256 internal teamLockPeriod;
     uint256 internal teamSupply = SafeMath.mul(12, 10 ** 14);
 
@@ -60,8 +59,8 @@ contract HXY is ERC20FreezableCapped, HexMoneySettings {
         return currentHxyRoundRate;
     }
 
-    function getTeamAddress() public view returns (address) {
-        return teamAddress;
+    function getTotalFrozen() public view returns (uint256) {
+        return totalFrozen;
     }
 
     function getTeamSupply() public view returns (uint256) {
@@ -114,7 +113,6 @@ contract HXY is ERC20FreezableCapped, HexMoneySettings {
     }
 
     function releaseFrozen() public {
-        //uint256 frozenTokens = freezingBalanceOf(msg.sender);
         (uint256 lockDate, uint256 frozenTokens) = getFreezing(msg.sender, 0);
         require(block.timestamp > lockDate, "minimum period not exceeded");
 
@@ -124,6 +122,7 @@ contract HXY is ERC20FreezableCapped, HexMoneySettings {
 
         _releaseOnce();
         mint(msg.sender, interestAmount);
+        totalFrozen = SafeMath.sub(totalFrozen, frozenTokens);
     }
 
     function releaseFrozenTeam() public {

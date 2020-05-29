@@ -13,7 +13,6 @@ import "./HexMoneySettings.sol";
 
 
 contract HexMoneyContract is ReentrancyGuard, HexMoneySettings {
-
     ERC20 internal hexToken;
     HXY internal hxyToken;
 
@@ -21,9 +20,10 @@ contract HexMoneyContract is ReentrancyGuard, HexMoneySettings {
     uint256 internal minHexAmount = SafeMath.mul(10 ** 3, hexDecimals);
     uint256 internal maxHexAmount = SafeMath.mul(10 ** 9, hexDecimals);
 
-    uint256 internal hexDividendsPercentage = 20;
+    uint256 internal hexDividendsPercentage = 90;
 
     struct HexDividends {
+        uint256 teamTokens;
         uint256 previousDayTokens;
         uint256 currentDayTokens;
         uint256 recordTime;
@@ -31,13 +31,15 @@ contract HexMoneyContract is ReentrancyGuard, HexMoneySettings {
 
     HexDividends internal dividends;
 
-    constructor (ERC20 newHexToken, HXY newHxyToken) public {
+    constructor (ERC20 newHexToken, HXY newHxyToken, address _teamAddress) public {
         require(address(newHexToken) != address(0x0), "hex token address should not be empty");
         require(address(newHxyToken) != address(0x0), "hxy token address should not be empty");
         hexToken = newHexToken;
         hxyToken = newHxyToken;
 
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
+        _setupRole(TEAM_ROLE, _teamAddress);
+        teamAddress = _teamAddress;
     }
 
     function getMinHexAmount() public view returns (uint256) {
@@ -72,8 +74,17 @@ contract HexMoneyContract is ReentrancyGuard, HexMoneySettings {
         uint256 userFrozenBalance = HXY(hxyToken).freezingBalanceOf(msg.sender);
         require(userFrozenBalance != 0, "must be freezed amount of HXY to claim dividends");
 
-        uint256 amount = SafeMath.div(dailyDividendsAmount,userFrozenBalance);
+        uint256 totalFrozen = HXY(hxyToken).getTotalFrozen();
+        uint256 userFrozenPercentage = SafeMath.div(userFrozenBalance, totalFrozen);
+        uint256 amount = SafeMath.mul(dailyDividendsAmount,userFrozenPercentage);
         require(IERC20(hexToken).transferFrom(address(this), msg.sender, amount), "fail in transfer dividends");
+    }
+
+    function claimPastDividendsTeam() public {
+        require(hasRole(TEAM_ROLE, _msgSender()), "Must have admin role to setup");
+        uint256 amount = dividends.teamTokens;
+        require(IERC20(hexToken).transferFrom(address(this), teamAddress, amount), "fail in transfer past dividends");
+        dividends.teamTokens = 0;
     }
 
     function setDividendsPercent(uint256 newPercentage) public returns (bool) {
@@ -108,6 +119,7 @@ contract HexMoneyContract is ReentrancyGuard, HexMoneySettings {
     function _recordDividends(uint256 amount) internal {
         if (block.timestamp > dividends.recordTime) {
             dividends.recordTime = SafeMath.add(dividends.recordTime, secondsInDay);
+            dividends.teamTokens = SafeMath.add(dividends.teamTokens, dividends.previousDayTokens);
             dividends.previousDayTokens = dividends.currentDayTokens;
             dividends.currentDayTokens = 0;
         }
