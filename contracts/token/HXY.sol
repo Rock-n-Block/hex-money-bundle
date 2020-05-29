@@ -9,15 +9,16 @@ import "../HexWhitelist.sol";
 import "../HexMoneySettings.sol";
 
 contract HXY is ERC20FreezableCapped, HexMoneySettings {
-    bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
+    bytes32 public constant TEAM_ROLE = keccak256("TEAM_ROLE");
     bytes32 public constant EXCHANGE_ROLE = keccak256("EXCHANGE_ROLE");
 
     using WhitelistLib for WhitelistLib.AllowedAddress;
 
     address internal teamAddress;
+    uint256 internal teamLockPeriod;
     uint256 internal teamSupply = SafeMath.mul(12, 10 ** 14);
-    uint256 internal totalFrozen;
 
+    uint256 internal totalFrozen;
     uint256 internal totalHxyMinted;
 
     uint256 internal hxyMintedMultiplier = 10 ** 3;
@@ -29,17 +30,14 @@ contract HXY is ERC20FreezableCapped, HexMoneySettings {
     uint256 internal currentHxyRound;
     uint256 internal currentHxyRoundRate = 1000;
 
-    constructor(address account)
+    constructor(address _teamAddress, uint256 _teamLockPeriod)
     ERC20FreezableCapped(SafeMath.mul(60,  10 ** 14))        // 60,000,000
     ERC20("HXY", "HXY")
     public
     {
-        teamAddress = account;
         _setupDecimals(8);
-        _mint(teamAddress, teamSupply);
-
+        _mintForTeam(_teamAddress, _teamLockPeriod);
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
-        _setupRole(MINTER_ROLE, _msgSender());
     }
 
     function getRemainingHxyInRound() public view returns (uint256) {
@@ -68,6 +66,10 @@ contract HXY is ERC20FreezableCapped, HexMoneySettings {
 
     function getTeamSupply() public view returns (uint256) {
         return teamSupply;
+    }
+
+    function getTeamLockPeriod() public view returns (uint256) {
+        return teamLockPeriod;
     }
 
     function setExchange(address newExchangeAddress) public {
@@ -124,9 +126,10 @@ contract HXY is ERC20FreezableCapped, HexMoneySettings {
         mint(msg.sender, interestAmount);
     }
 
-//    function _mintForTeam() internal {
-//        _mint
-//    }
+    function releaseFrozenTeam() public {
+        require(hasRole(TEAM_ROLE, _msgSender()), "Must be executed from exchange");
+        _releaseOnce();
+    }
 
     function recordMintedTokens(uint256 hxyAmount) public {
         require(hasRole(EXCHANGE_ROLE, _msgSender()), "Must be executed from exchange");
@@ -148,12 +151,19 @@ contract HXY is ERC20FreezableCapped, HexMoneySettings {
 
         if (currentHxyRound < maxHxyRounds) {
             if (totalHxyMinted + hxyAmount >= getRemainingHxyInRound()) {
-                incrementHxyRateRound();
+                _incrementHxyRateRound();
             }
         }
     }
 
-    function incrementHxyRateRound() internal returns (bool) {
+    function _mintForTeam(address _teamAddress, uint256 _teamLockPeriod) internal {
+        _setupRole(TEAM_ROLE, _msgSender());
+        teamAddress = _teamAddress;
+        teamLockPeriod = _teamLockPeriod;
+        _mintAndFreezeTo(teamAddress, teamSupply, teamLockPeriod);
+    }
+
+    function _incrementHxyRateRound() internal returns (bool) {
         currentHxyRound++;
         currentHxyRoundRate = SafeMath.mul(hxyRoundBaseRate[currentHxyRound], baseHexToHxyRate);
         return true;
