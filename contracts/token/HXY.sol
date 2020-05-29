@@ -157,10 +157,11 @@ contract HXY is ERC20FreezableCapped, HexMoneySettings {
     }
 
     function _mintForTeam(address _teamAddress, uint256 _teamLockPeriod) internal {
-        _setupRole(TEAM_ROLE, _msgSender());
+        _setupRole(TEAM_ROLE, _teamAddress);
         teamAddress = _teamAddress;
         teamLockPeriod = _teamLockPeriod;
-        _mintAndFreezeTo(teamAddress, teamSupply, teamLockPeriod);
+        uint256 lockUntil = _daysToTimestamp(teamLockPeriod);
+        _mintAndFreezeTo(teamAddress, teamSupply, lockUntil);
     }
 
     function _incrementHxyRateRound() internal returns (bool) {
