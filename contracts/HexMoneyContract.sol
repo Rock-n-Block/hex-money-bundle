@@ -12,12 +12,10 @@ import "./HexWhitelist.sol";
 import "./HexMoneySettings.sol";
 
 
-contract HexMoneyContract is AccessControl, ReentrancyGuard, HexMoneySettings {
-    // bytes32 public constant MINTER_ROLE = keccak256("MANAGEMENT_ROLE");
+contract HexMoneyContract is ReentrancyGuard, HexMoneySettings {
 
     ERC20 internal hexToken;
     HXY internal hxyToken;
-    HexWhitelist internal whitelist;
 
     uint256 internal hexDecimals = 10 ** 8;
     uint256 internal minHexAmount = SafeMath.mul(10 ** 3, hexDecimals);
@@ -60,10 +58,6 @@ contract HexMoneyContract is AccessControl, ReentrancyGuard, HexMoneySettings {
         return address(hxyToken);
     }
 
-    function getWhitelistAddress() public view returns (address) {
-        return address(whitelist);
-    }
-
     function exchangeHex(uint256 amount) public {
         require(IERC20(hexToken).transferFrom(msg.sender, address(this), amount), "exchange amount greater than approved");
 
@@ -95,12 +89,6 @@ contract HexMoneyContract is AccessControl, ReentrancyGuard, HexMoneySettings {
     function setMaxHexAmount(uint256 newAmount) public {
         require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Must have admin role to setup");
         maxHexAmount = SafeMath.mul(newAmount, hexDecimals);
-    }
-
-    function setWhitelist(address newWhitelistAddress) public {
-        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Must have admin role to setup");
-        require(newWhitelistAddress != address(0x0), "Invalid whitelist address");
-        whitelist = HexWhitelist(newWhitelistAddress);
     }
 
     function setHexToken(address newHexToken) public {

@@ -8,11 +8,9 @@ import "../WhitelistLib.sol";
 import "../HexWhitelist.sol";
 import "../HexMoneySettings.sol";
 
-contract HXY is AccessControl, ERC20FreezableCapped, HexMoneySettings {
+contract HXY is ERC20FreezableCapped, HexMoneySettings {
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     bytes32 public constant EXCHANGE_ROLE = keccak256("EXCHANGE_ROLE");
-
-    HexWhitelist internal whitelist;
 
     using WhitelistLib for WhitelistLib.AllowedAddress;
 
@@ -64,10 +62,6 @@ contract HXY is AccessControl, ERC20FreezableCapped, HexMoneySettings {
         return currentHxyRoundRate;
     }
 
-    function getWhitelistAddress() public view returns (address) {
-        return address(whitelist);
-    }
-
     function getTeamAddress() public view returns (address) {
         return teamAddress;
     }
@@ -80,12 +74,6 @@ contract HXY is AccessControl, ERC20FreezableCapped, HexMoneySettings {
         require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Must have admin role to setup");
         require(newExchangeAddress != address(0x0), "Invalid exchange address");
         _setupRole(EXCHANGE_ROLE, newExchangeAddress);
-    }
-
-    function setWhitelist(address newWhitelistAddress) public {
-        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Must have admin role to setup");
-        require(newWhitelistAddress != address(0x0), "Invalid exchange address");
-        whitelist = HexWhitelist(newWhitelistAddress);
     }
 
     function mintFromExchange(address account, uint256 hexAmount) public {
@@ -136,7 +124,6 @@ contract HXY is AccessControl, ERC20FreezableCapped, HexMoneySettings {
         mint(msg.sender, interestAmount);
     }
 
-
 //    function _mintForTeam() internal {
 //        _mint
 //    }
@@ -172,12 +159,7 @@ contract HXY is AccessControl, ERC20FreezableCapped, HexMoneySettings {
         return true;
     }
 
-
-
     function _daysToTimestamp(uint256 lockDays) internal view returns(uint256) {
         return SafeMath.add(block.timestamp, SafeMath.mul(lockDays, secondsInDay));
     }
-
-
-
 }
