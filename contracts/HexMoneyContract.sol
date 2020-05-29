@@ -4,6 +4,7 @@ pragma solidity ^0.6.2;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/math/SafeMath.sol";
 //import "./token/ERC20/ERC20.sol";
 import "./token/ERC20.sol";
 import "./token/HXY.sol";
@@ -11,16 +12,14 @@ import "./HexWhitelist.sol";
 import "./HexMoneySettings.sol";
 
 
-contract HexMoneyContract is AccessControl, ReentrancyGuard, HexMoneySettings {
-    // bytes32 public constant MINTER_ROLE = keccak256("MANAGEMENT_ROLE");
+contract HexMoneyContract is ReentrancyGuard, HexMoneySettings {
 
     ERC20 internal hexToken;
     HXY internal hxyToken;
-    HexWhitelist internal whitelist;
 
     uint256 internal hexDecimals = 10 ** 8;
-    uint256 internal minHexAmount = 10 ** 3 * hexDecimals;
-    uint256 internal maxHexAmount = 10 ** 9 * hexDecimals;
+    uint256 internal minHexAmount = SafeMath.mul(10 ** 3, hexDecimals);
+    uint256 internal maxHexAmount = SafeMath.mul(10 ** 9, hexDecimals);
 
     uint256 internal hexDividendsPercentage = 20;
 
@@ -59,10 +58,6 @@ contract HexMoneyContract is AccessControl, ReentrancyGuard, HexMoneySettings {
         return address(hxyToken);
     }
 
-    function getWhitelistAddress() public view returns (address) {
-        return address(whitelist);
-    }
-
     function exchangeHex(uint256 amount) public {
         require(IERC20(hexToken).transferFrom(msg.sender, address(this), amount), "exchange amount greater than approved");
 
@@ -71,11 +66,11 @@ contract HexMoneyContract is AccessControl, ReentrancyGuard, HexMoneySettings {
     }
 
     function claimDividends() public {
-        uint256 dailyDividendsAmount = dividends.previousDayTokens / hexDividendsPercentage;
+        uint256 dailyDividendsAmount = SafeMath.div(dividends.previousDayTokens, hexDividendsPercentage);
         uint256 userFrozenBalance = HXY(hxyToken).freezingBalanceOf(msg.sender);
         require(userFrozenBalance != 0, "must be freezed amount of HXY to claim dividends");
 
-        uint256 amount = dailyDividendsAmount / userFrozenBalance;
+        uint256 amount = SafeMath.div(dailyDividendsAmount,userFrozenBalance);
         require(IERC20(hexToken).transferFrom(address(this), msg.sender, amount), "fail in transfer dividends");
     }
 
@@ -88,18 +83,12 @@ contract HexMoneyContract is AccessControl, ReentrancyGuard, HexMoneySettings {
 
     function setMinHexAmount(uint256 newAmount) public {
         require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Must have admin role to setup");
-        minHexAmount = newAmount * hexDecimals;
+        minHexAmount = SafeMath.mul(newAmount, hexDecimals);
     }
 
     function setMaxHexAmount(uint256 newAmount) public {
         require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Must have admin role to setup");
-        maxHexAmount = newAmount * hexDecimals;
-    }
-
-    function setWhitelist(address newWhitelistAddress) public {
-        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Must have admin role to setup");
-        require(newWhitelistAddress != address(0x0), "Invalid whitelist address");
-        whitelist = HexWhitelist(newWhitelistAddress);
+        maxHexAmount = SafeMath.mul(newAmount, hexDecimals);
     }
 
     function setHexToken(address newHexToken) public {
@@ -116,11 +105,11 @@ contract HexMoneyContract is AccessControl, ReentrancyGuard, HexMoneySettings {
 
     function _recordDividends(uint256 amount) internal {
         if (block.timestamp > dividends.recordTime) {
-            dividends.recordTime += secondsInDay;
+            dividends.recordTime = SafeMath.add(dividends.recordTime, secondsInDay);
             dividends.previousDayTokens = dividends.currentDayTokens;
             dividends.currentDayTokens = 0;
         }
 
-        dividends.currentDayTokens += amount;
+        dividends.currentDayTokens = SafeMath.add(dividends.currentDayTokens, amount);
     }
 }
