@@ -5,15 +5,15 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 //import "./token/ERC20/ERC20.sol";
-import "./token/ERC20.sol";
 import "./token/HXY.sol";
 import "./HexWhitelist.sol";
 import "./HexMoneySettings.sol";
 
 
 contract HexMoneyContract is ReentrancyGuard, HexMoneySettings {
-    ERC20 internal hexToken;
+    IERC20 internal hexToken;
     HXY internal hxyToken;
 
     uint256 internal hexDecimals = 10 ** 8;
@@ -31,7 +31,7 @@ contract HexMoneyContract is ReentrancyGuard, HexMoneySettings {
 
     HexDividends internal dividends;
 
-    constructor (ERC20 newHexToken, HXY newHxyToken, address _teamAddress) public {
+    constructor (IERC20 newHexToken, HXY newHxyToken, address _teamAddress) public {
         require(address(newHexToken) != address(0x0), "hex token address should not be empty");
         require(address(newHxyToken) != address(0x0), "hxy token address should not be empty");
         hexToken = newHexToken;
