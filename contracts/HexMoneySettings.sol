@@ -5,7 +5,7 @@ import "./HexWhitelist.sol";
 
 contract HexMoneySettings is AccessControl  {
     bytes32 public constant TEAM_ROLE = keccak256("TEAM_ROLE");
-    uint256 public constant secondsInDay = 86400;
+    uint256 public constant SECONDS_IN_DAY = 86400;
 
     address internal teamAddress;
 

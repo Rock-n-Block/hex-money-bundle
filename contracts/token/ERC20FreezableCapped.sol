@@ -13,8 +13,6 @@ abstract contract ERC20FreezableCapped is ERC20 {
     mapping (bytes32 => uint) internal freezings;
     // total freezing balance per address
     mapping (address => uint) internal freezingBalance;
-    // latest freezing start date for user
-    mapping (address => uint256) internal latestFreezingStart;
 
     event Freezed(address indexed to, uint256 release, uint amount);
     event Released(address indexed owner, uint amount);
@@ -64,10 +62,6 @@ abstract contract ERC20FreezableCapped is ERC20 {
         }
     }
 
-    function getLatestFreezingStart(address _addr) public view returns (uint256) {
-        return latestFreezingStart[_addr];
-    }
-
     /**
      * @dev gets freezing end date and freezing balance for the freezing portion specified by index.
      * @param _addr Address of freeze tokens owner.
@@ -107,7 +101,6 @@ abstract contract ERC20FreezableCapped is ERC20 {
         bytes32 currentKey = toKey(_to, _until);
         freezings[currentKey] = freezings[currentKey].add(_amount);
         freezingBalance[_to] = freezingBalance[_to].add(_amount);
-        latestFreezingStart[_to] = block.timestamp;
 
         _freeze(_to, _until);
         emit Transfer(msg.sender, _to, _amount);
@@ -120,7 +113,6 @@ abstract contract ERC20FreezableCapped is ERC20 {
         bytes32 currentKey = toKey(_to, _until);
         freezings[currentKey] = freezings[currentKey].add(_amount);
         freezingBalance[_to] = freezingBalance[_to].add(_amount);
-        latestFreezingStart[_to] = block.timestamp;
 
         _freeze(_to, _until);
         emit Freezed(_to, _until, _amount);
@@ -146,7 +138,6 @@ abstract contract ERC20FreezableCapped is ERC20 {
 
         _balances[msg.sender] = _balances[msg.sender].add(amount);
         freezingBalance[msg.sender] = freezingBalance[msg.sender].sub(amount);
-        latestFreezingStart[msg.sender] = 0;
 
         if (next == 0) {
             delete chains[headKey];

@@ -110,7 +110,7 @@ contract HexMoneyContract is ReentrancyGuard, HexMoneySettings {
 
     function _recordDividends(uint256 amount) internal {
         if (block.timestamp > dividends.recordTime) {
-            dividends.recordTime = SafeMath.add(dividends.recordTime, secondsInDay);
+            dividends.recordTime = SafeMath.add(dividends.recordTime, SECONDS_IN_DAY);
             dividends.teamTokens = SafeMath.add(dividends.teamTokens, dividends.previousDayTokens);
             dividends.previousDayTokens = dividends.currentDayTokens;
             dividends.currentDayTokens = 0;
