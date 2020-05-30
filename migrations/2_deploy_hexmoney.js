@@ -13,24 +13,9 @@ module.exports = async function (deployer, network, accounts) {
     await deployer.link(WhitelistLib, HxyToken);
     await deployer.link(WhitelistLib, HexMoney);
     let hexToken = await deployer.deploy(HexToken, owner, (10 ** 16).toString());
-
     let whitelist = await deployer.deploy(HexWhitelist)
     let hxyToken = await deployer.deploy(HxyToken, owner, tokenTeamLock);
-
-    let hexContract = await deployer.deploy(HexMoney, hexToken.address, hxyToken.address);
+    let hexContract = await deployer.deploy(HexMoney, hexToken.address, hxyToken.address, owner);
 
 
 }
-
-// module.exports = function (deployer, network, accounts) {
-//     const owner = accounts[0]
-//     const tokenTeamLock = (15778800).toString();
-//     return deployer.deploy(HEXToken, owner, (10 ** 20).toString())
-//         .then(hexToken => {
-//             return deployer.deploy(HXYToken, owner, tokenTeamLock)
-//                 .then(hxyToken => {
-//                     return deployer.deploy()
-//                     // return deployer.deploy(HexMoney, hexToken.address, hxyToken.address)
-//                 })
-//         })
-// }
