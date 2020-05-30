@@ -30,6 +30,7 @@ contract('Credit', accounts => {
     const HXY_TEAM_ADDRESS = accounts[5];
 
     const eth = web3.utils.toWei('1', 'ether');
+    const day = 86400;
 
     let now;
     let snapshotId;
@@ -49,7 +50,7 @@ contract('Credit', accounts => {
         hxyToken = await HXYToken.new(HXY_TEAM_ADDRESS, hxyTeamTimeLock);
         hexWhitelist = await HEXWhitelist.new();
         (await hxyToken.balanceOf(HXY_TEAM_ADDRESS)).should.be.bignumber.equal(new BN(hxyTeamTokenAmount));
-        hexMoney = await HEXMoney.new(hexToken.address, hxyToken.address);
+        hexMoney = await HEXMoney.new(hexToken.address, hxyToken.address, OWNER);
         await hxyToken.setExchange(hexMoney.address);
         //await hxyToken.approve(hexMoney.address, hxyWalletAmount, {from: HXY_TOKEN_WALLET});
         //(await hxyToken.allowance(HXY_TOKEN_WALLET, hexMoney.address)).should.be.bignumber.equal(hxyWalletAmount);
@@ -66,6 +67,7 @@ contract('Credit', accounts => {
     });
     */
 
+    /*
     it('#0 balances', () => {
         accounts.forEach((account, index) => {
             web3.eth.getBalance(account, function (_, balance) {
@@ -146,5 +148,41 @@ contract('Credit', accounts => {
 
         const secondHxyAmount = secondRoundAmount.div(secondRoundRate);
         (await hxyToken.balanceOf(BUYER_2)).should.be.bignumber.equals(secondHxyAmount);
+    })
+
+     */
+
+    it('#5 check dividends if freezed', async () => {
+        const rate = await hxyToken.getCurrentHxyRate();
+        const hexAmount = (await hxyToken.getRemainingHxyInRound()).mul(rate);
+
+        await hexToken.mint(BUYER_1, hexAmount.toString());
+        await hexToken.approve(hexMoney.address, hexAmount.toString(), {from: BUYER_1});
+        await hexMoney.exchangeHex(hexAmount.toString(), {from: BUYER_1}).should.not.be.rejected;
+
+        const hxyBalance = await hxyToken.balanceOf(BUYER_1);
+        const freezeTime = (await getBlockchainTimestamp()) + (10 * day);
+        await hxyToken.freezeHxy(hxyBalance.toString(), freezeTime, {from: BUYER_1}).should.not.be.rejected;
+
+        await increaseTime(day + 10);
+        await hexMoney.claimDividends({from: BUYER_1}).should.not.be.rejected;
+
+        const hexBalanceAfter = await hexToken.balanceOf(BUYER_1);
+        const dividendsPercent = await hexMoney.getHexDividendsPercentage();
+        hexBalanceAfter.should.be.bignumber.equals(new BN(hexAmount * dividendsPercent / 100));
+    })
+
+    it('#6 check dividends if not freezed', async () => {
+        const rate = await hxyToken.getCurrentHxyRate();
+        const hexAmount = (await hxyToken.getRemainingHxyInRound()).mul(rate);
+
+        await hexToken.mint(BUYER_1, hexAmount.toString());
+
+        await hexToken.approve(hexMoney.address, hexAmount.toString(), {from: BUYER_1});
+        await hexMoney.exchangeHex(hexAmount.toString(), {from: BUYER_1}).should.not.be.rejected;
+
+        await increaseTime(day + 10);
+
+        await hexMoney.claimDividends({from: BUYER_1}).should.be.rejected;
     })
 });

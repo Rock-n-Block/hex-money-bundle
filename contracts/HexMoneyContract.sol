@@ -15,12 +15,15 @@ contract HexMoneyContract is ReentrancyGuard, HexMoneySettings {
     IERC20 internal hexToken;
     HXY internal hxyToken;
 
+    mapping (address => uint256) internal userClaimedHexDividends;
+    mapping (address => uint256) internal lastHexClaim;
+
     uint256 internal hexDecimals = 10 ** 8;
     uint256 internal minHexAmount = SafeMath.mul(10 ** 3, hexDecimals);
     uint256 internal maxHexAmount = SafeMath.mul(10 ** 9, hexDecimals);
 
     uint256 internal hexDividendsPercentage = 90;
-    uint256 internal claimedDividends;
+    uint256 internal claimedHexDividends;
 
     struct HexDividends {
         uint256 teamTokens;
@@ -40,10 +43,12 @@ contract HexMoneyContract is ReentrancyGuard, HexMoneySettings {
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _setupRole(TEAM_ROLE, _teamAddress);
         teamAddress = _teamAddress;
+
+        //_setInitialRecordTime(_recordTime);
     }
 
-    function getClaimedDividends() public view returns (uint256) {
-        return claimedDividends;
+    function getClaimedHexDividends() public view returns (uint256) {
+        return userClaimedHexDividends[_msgSender()];
     }
 
     function getMinHexAmount() public view returns (uint256) {
@@ -74,16 +79,21 @@ contract HexMoneyContract is ReentrancyGuard, HexMoneySettings {
     }
 
     function claimDividends() public {
-        uint256 dailyDividendsAmount = SafeMath.div(dividends.previousDayTokens, hexDividendsPercentage);
+        require(lastHexClaim[_msgSender()] <= dividends.recordTime, "tokens already claimed today");
+        _checkUpdateDividends();
+        uint256 dailyDividendsAmount = SafeMath.div(SafeMath.mul(dividends.previousDayTokens, hexDividendsPercentage), 100);
         uint256 userFrozenBalance = HXY(hxyToken).freezingBalanceOf(_msgSender());
         require(userFrozenBalance != 0, "must be freezed amount of HXY to claim dividends");
+
 
         uint256 totalFrozen = HXY(hxyToken).getTotalFrozen();
         uint256 userFrozenPercentage = SafeMath.div(userFrozenBalance, totalFrozen);
         uint256 amount = SafeMath.mul(dailyDividendsAmount,userFrozenPercentage);
-        require(IERC20(hexToken).transferFrom(address(this), _msgSender(), amount), "fail in transfer dividends");
+        require(IERC20(hexToken).transfer(_msgSender(), amount), "fail in transfer dividends");
 
-        claimedDividends = SafeMath.add(claimedDividends, amount);
+        userClaimedHexDividends[_msgSender()] = SafeMath.add(userClaimedHexDividends[_msgSender()], amount);
+        claimedHexDividends = SafeMath.add(claimedHexDividends, amount);
+        lastHexClaim[_msgSender()] = block.timestamp;
     }
 
     function claimPastDividendsTeam() public onlyTeamRole {
@@ -115,14 +125,29 @@ contract HexMoneyContract is ReentrancyGuard, HexMoneySettings {
         hxyToken = HXY(newHxyToken);
     }
 
-    function _recordDividends(uint256 amount) internal {
-        if (block.timestamp > dividends.recordTime) {
-            dividends.recordTime = SafeMath.add(dividends.recordTime, SECONDS_IN_DAY);
-            dividends.teamTokens = SafeMath.add(dividends.teamTokens, dividends.previousDayTokens);
-            dividends.previousDayTokens = dividends.currentDayTokens;
-            dividends.currentDayTokens = 0;
-        }
+    function _setInitialRecordTime(uint256 _recordTime) internal {
+        dividends.recordTime = _recordTime;
+    }
 
+    function _recordDividends(uint256 amount) internal {
+        _checkUpdateDividends();
         dividends.currentDayTokens = SafeMath.add(dividends.currentDayTokens, amount);
+    }
+
+    function _checkUpdateDividends() internal {
+        if (block.timestamp > dividends.recordTime) {
+            uint256 daysPassed = SafeMath.div(SafeMath.sub(block.timestamp, dividends.recordTime), SECONDS_IN_DAY);
+            dividends.recordTime = SafeMath.add(dividends.recordTime, SafeMath.mul(daysPassed, SECONDS_IN_DAY));
+            if (daysPassed <= 1) {
+                dividends.teamTokens = SafeMath.add(dividends.teamTokens, dividends.previousDayTokens);
+                dividends.previousDayTokens = dividends.currentDayTokens;
+            } else {
+                uint256 prevAndCurrentTokens = SafeMath.add(dividends.previousDayTokens, dividends.currentDayTokens);
+                dividends.teamTokens = SafeMath.add(dividends.teamTokens, prevAndCurrentTokens);
+                dividends.previousDayTokens = 0;
+            }
+            dividends.currentDayTokens = 0;
+
+        }
     }
 }

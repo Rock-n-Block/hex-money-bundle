@@ -82,9 +82,18 @@ contract HXY is ERC20FreezableCapped, HexMoneySettings {
         return teamLockPeriod;
     }
 
-    function getLatestFreezingDate(address _addr) public view returns (uint256, uint256, uint256) {
+    function getLatestFreezingData(address _addr) public view returns (uint256, uint256, uint256) {
         latestFreezing memory data = latestFreezingData[_addr];
         return (data.startDate, data.endDate, data.tokenAmount);
+    }
+
+    function getCurrentInterestAmount() public view returns (uint256) {
+        uint256 startFreezeDate = latestFreezingData[_msgSender()].startDate;
+        uint256 endFreezeDate = latestFreezingData[_msgSender()].endDate;
+        uint256 interestEnd = (block.timestamp >= endFreezeDate) ? endFreezeDate : block.timestamp;
+        uint256 interestDays = SafeMath.div(SafeMath.sub(interestEnd, startFreezeDate), SECONDS_IN_DAY);
+        uint256 frozenTokens = latestFreezingData[_msgSender()].tokenAmount;
+        return SafeMath.mul(SafeMath.div(frozenTokens, 1000), interestDays);
     }
 
     function setExchange(address newExchangeAddress) public onlyAdminRole {
@@ -112,14 +121,16 @@ contract HXY is ERC20FreezableCapped, HexMoneySettings {
         }
     }
 
-
     function freezeHxy(uint256 lockAmount, uint256 freezeUntil) public {
-        require(freezeUntil >= MINIMAL_FREEZE_PERIOD, "must be more than 7 days");
+        uint256 freezeDays = SafeMath.div(SafeMath.sub(freezeUntil, block.timestamp), SECONDS_IN_DAY);
+        require(freezeDays >= MINIMAL_FREEZE_PERIOD, "must be more than 7 days");
 
         uint256 startFreezeDate = latestFreezingData[_msgSender()].startDate;
-        uint256 lockDate = _daysToTimestampFrom(startFreezeDate, MINIMAL_FREEZE_PERIOD);
-        if (lockDate != 0 && block.timestamp >= lockDate) {
-            releaseFrozen();
+        if (startFreezeDate != 0) {
+            uint256 lockDate = _daysToTimestampFrom(startFreezeDate, MINIMAL_FREEZE_PERIOD);
+            if (block.timestamp >= lockDate) {
+                releaseFrozen();
+            }
         }
 
         _freezeTo(_msgSender(), lockAmount, _getBaseLockDays());
