@@ -55,11 +55,7 @@ contract HexWhitelist is AccessControl, ReentrancyGuard {
     }
 
     function isRegisteredDapp(address dappAddress) public view returns (bool) {
-        if (dapps[dappAddress].addedAt != 0) {
-            return true;
-        } else {
-            return false;
-        }
+        return (dapps[dappAddress].addedAt != 0) ? true : false;
     }
 
     function getDappTradeable(address dappAddress) public view returns (bool) {
