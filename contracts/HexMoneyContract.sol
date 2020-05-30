@@ -6,7 +6,6 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-//import "./token/ERC20/ERC20.sol";
 import "./token/HXY.sol";
 import "./HexWhitelist.sol";
 import "./HexMoneySettings.sol";
@@ -63,21 +62,21 @@ contract HexMoneyContract is ReentrancyGuard, HexMoneySettings {
     }
 
     function exchangeHex(uint256 amount) public {
-        require(IERC20(hexToken).transferFrom(msg.sender, address(this), amount), "exchange amount greater than approved");
+        require(IERC20(hexToken).transferFrom(_msgSender(), address(this), amount), "exchange amount greater than approved");
 
-        HXY(hxyToken).mintFromExchange(msg.sender, amount);
+        HXY(hxyToken).mintFromExchange(_msgSender(), amount);
         _recordDividends(amount);
     }
 
     function claimDividends() public {
         uint256 dailyDividendsAmount = SafeMath.div(dividends.previousDayTokens, hexDividendsPercentage);
-        uint256 userFrozenBalance = HXY(hxyToken).freezingBalanceOf(msg.sender);
+        uint256 userFrozenBalance = HXY(hxyToken).freezingBalanceOf(_msgSender());
         require(userFrozenBalance != 0, "must be freezed amount of HXY to claim dividends");
 
         uint256 totalFrozen = HXY(hxyToken).getTotalFrozen();
         uint256 userFrozenPercentage = SafeMath.div(userFrozenBalance, totalFrozen);
         uint256 amount = SafeMath.mul(dailyDividendsAmount,userFrozenPercentage);
-        require(IERC20(hexToken).transferFrom(address(this), msg.sender, amount), "fail in transfer dividends");
+        require(IERC20(hexToken).transferFrom(address(this), _msgSender(), amount), "fail in transfer dividends");
     }
 
     function claimPastDividendsTeam() public onlyTeamRole {

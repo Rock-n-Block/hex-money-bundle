@@ -85,7 +85,7 @@ contract HXY is ERC20FreezableCapped, HexMoneySettings {
     }
 
     function mintFromDapp(address account, uint256 amount) public {
-        address dappAddress = msg.sender;
+        address dappAddress = _msgSender();
         require(whitelist.isRegisteredDapp(dappAddress), "must be executed from whitelisted dapp");
 
         if (whitelist.getDappTradeable(dappAddress)) {
@@ -101,7 +101,7 @@ contract HXY is ERC20FreezableCapped, HexMoneySettings {
 
     function freezeHxy(uint256 lockAmount, uint256 lockDays) public {
         require(lockDays >= 7, "must be more than 7 days");
-        (uint256 lockDate, uint256 frozenTokens) = getFreezing(msg.sender, 0);
+        (uint256 lockDate, uint256 frozenTokens) = getFreezing(_msgSender(), 0);
         if (lockDate != 0) {
             if (block.timestamp >= lockDate) {
                 releaseFrozen();
@@ -109,20 +109,20 @@ contract HXY is ERC20FreezableCapped, HexMoneySettings {
         }
 
         uint256 freezeUntil = _daysToTimestamp(lockDays);
-        _freezeTo(msg.sender, lockAmount, freezeUntil);
+        _freezeTo(_msgSender(), lockAmount, freezeUntil);
         totalFrozen = SafeMath.add(totalFrozen, lockAmount);
     }
 
     function releaseFrozen() public {
-        (uint256 lockDate, uint256 frozenTokens) = getFreezing(msg.sender, 0);
+        (uint256 lockDate, uint256 frozenTokens) = getFreezing(_msgSender(), 0);
         require(block.timestamp > lockDate, "minimum period not exceeded");
 
-        uint256 freezingStart = getLatestFreezingStart(msg.sender);
+        uint256 freezingStart = getLatestFreezingStart(_msgSender());
         uint256 lockDays = SafeMath.div(SafeMath.sub(lockDate, freezingStart), secondsInDay);
         uint256 interestAmount = SafeMath.mul(SafeMath.div(frozenTokens, 1000), lockDays);
 
         _releaseOnce();
-        mint(msg.sender, interestAmount);
+        mint(_msgSender(), interestAmount);
         totalFrozen = SafeMath.sub(totalFrozen, frozenTokens);
     }
 
