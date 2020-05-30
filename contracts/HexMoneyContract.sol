@@ -80,38 +80,31 @@ contract HexMoneyContract is ReentrancyGuard, HexMoneySettings {
         require(IERC20(hexToken).transferFrom(address(this), msg.sender, amount), "fail in transfer dividends");
     }
 
-    function claimPastDividendsTeam() public {
-        require(hasRole(TEAM_ROLE, _msgSender()), "Must have admin role to setup");
+    function claimPastDividendsTeam() public onlyTeamRole {
         uint256 amount = dividends.teamTokens;
         require(IERC20(hexToken).transferFrom(address(this), teamAddress, amount), "fail in transfer past dividends");
         dividends.teamTokens = 0;
     }
 
-    function setDividendsPercent(uint256 newPercentage) public returns (bool) {
-        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Must have admin role to setup");
+    function setDividendsPercent(uint256 newPercentage) public onlyAdminRole {
         require(newPercentage < 100, "invalid hex percentage");
         hexDividendsPercentage = newPercentage;
-        return true;
     }
 
-    function setMinHexAmount(uint256 newAmount) public {
-        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Must have admin role to setup");
+    function setMinHexAmount(uint256 newAmount) public onlyAdminRole {
         minHexAmount = SafeMath.mul(newAmount, hexDecimals);
     }
 
-    function setMaxHexAmount(uint256 newAmount) public {
-        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Must have admin role to setup");
+    function setMaxHexAmount(uint256 newAmount) public onlyAdminRole {
         maxHexAmount = SafeMath.mul(newAmount, hexDecimals);
     }
 
-    function setHexToken(address newHexToken) public {
-        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Must have admin role to setup");
+    function setHexToken(address newHexToken) public onlyAdminRole {
         require(newHexToken != address(0x0), "Invalid HEX token address");
         hexToken = ERC20(newHexToken);
     }
 
-    function setHxyToken(address newHxyToken) public {
-        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Must have admin role to setup");
+    function setHxyToken(address newHxyToken) public onlyAdminRole {
         require(newHxyToken != address(0x0), "Invalid HXY token address");
         hxyToken = HXY(newHxyToken);
     }

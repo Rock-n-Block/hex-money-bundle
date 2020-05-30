@@ -39,6 +39,8 @@ contract HXY is ERC20FreezableCapped, HexMoneySettings {
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
     }
 
+
+
     function getRemainingHxyInRound() public view returns (uint256) {
         return (hxyRoundMintAmount[currentHxyRound] * hxyMintedMultiplier) - totalHxyMinted;
     }
@@ -71,8 +73,7 @@ contract HXY is ERC20FreezableCapped, HexMoneySettings {
         return teamLockPeriod;
     }
 
-    function setExchange(address newExchangeAddress) public {
-        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Must have admin role to setup");
+    function setExchange(address newExchangeAddress) public onlyAdminRole {
         require(newExchangeAddress != address(0x0), "Invalid exchange address");
         _setupRole(EXCHANGE_ROLE, newExchangeAddress);
     }
@@ -125,14 +126,8 @@ contract HXY is ERC20FreezableCapped, HexMoneySettings {
         totalFrozen = SafeMath.sub(totalFrozen, frozenTokens);
     }
 
-    function releaseFrozenTeam() public {
-        require(hasRole(TEAM_ROLE, _msgSender()), "Must be executed from exchange");
+    function releaseFrozenTeam() public onlyTeamRole {
         _releaseOnce();
-    }
-
-    function recordMintedTokens(uint256 hxyAmount) public {
-        require(hasRole(EXCHANGE_ROLE, _msgSender()), "Must be executed from exchange");
-        _recordMintedTokens(hxyAmount);
     }
 
     function mint(address account, uint256 amount) internal {
