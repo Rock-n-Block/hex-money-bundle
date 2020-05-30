@@ -44,8 +44,8 @@ contract HXY is ERC20FreezableCapped, HexMoneySettings {
     public
     {
         _setupDecimals(8);
-        _mintForTeam(_teamAddress, _teamLockPeriod);
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
+        _mintForTeam(_teamAddress, _teamLockPeriod);
     }
 
 

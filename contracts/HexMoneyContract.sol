@@ -20,6 +20,7 @@ contract HexMoneyContract is ReentrancyGuard, HexMoneySettings {
     uint256 internal maxHexAmount = SafeMath.mul(10 ** 9, hexDecimals);
 
     uint256 internal hexDividendsPercentage = 90;
+    uint256 internal claimedDividends;
 
     struct HexDividends {
         uint256 teamTokens;
@@ -39,6 +40,10 @@ contract HexMoneyContract is ReentrancyGuard, HexMoneySettings {
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _setupRole(TEAM_ROLE, _teamAddress);
         teamAddress = _teamAddress;
+    }
+
+    function getClaimedDividends() public view returns (uint256) {
+        return claimedDividends;
     }
 
     function getMinHexAmount() public view returns (uint256) {
@@ -77,6 +82,8 @@ contract HexMoneyContract is ReentrancyGuard, HexMoneySettings {
         uint256 userFrozenPercentage = SafeMath.div(userFrozenBalance, totalFrozen);
         uint256 amount = SafeMath.mul(dailyDividendsAmount,userFrozenPercentage);
         require(IERC20(hexToken).transferFrom(address(this), _msgSender(), amount), "fail in transfer dividends");
+
+        claimedDividends = SafeMath.add(claimedDividends, amount);
     }
 
     function claimPastDividendsTeam() public onlyTeamRole {
