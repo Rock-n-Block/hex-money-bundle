@@ -2,7 +2,6 @@
 node_modules
 coverage
 coverage.json
-.secret
 .infura
 .DS_Store
 dist
