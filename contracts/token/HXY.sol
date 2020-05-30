@@ -168,7 +168,6 @@ contract HXY is ERC20FreezableCapped, HexMoneySettings {
 
         if (currentHxyRound < maxHxyRounds && totalHxyMinted + hxyAmount >= getRemainingHxyInRound()) {
                 _incrementHxyRateRound();
-            }
         }
     }
 
