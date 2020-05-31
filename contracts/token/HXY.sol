@@ -23,8 +23,8 @@ contract HXY is ERC20FreezableCapped, HexMoneySettings {
     uint256 internal totalFrozen;
     uint256 internal totalHxyMinted;
 
-    uint256 internal hxyMintedMultiplier = 10 ** 3;
-    uint256[] internal hxyRoundMintAmount = [750, 5000, 10000, 15000, 20000, 25000, 30000];
+    uint256 internal hxyMintedMultiplier = 10 ** 6;
+    uint256[] internal hxyRoundMintAmount = [3, 6, 9, 12, 15, 18, 21];
     uint256 internal baseHexToHxyRate = 10 ** 3;
     uint256[] internal hxyRoundBaseRate = [1, 2, 3, 4, 5, 6, 7];
 
@@ -51,11 +51,11 @@ contract HXY is ERC20FreezableCapped, HexMoneySettings {
 
 
     function getRemainingHxyInRound() public view returns (uint256) {
-        return (hxyRoundMintAmount[currentHxyRound] * hxyMintedMultiplier) - totalHxyMinted;
+        return _getRemainingHxyInRound(currentHxyRound);
     }
 
     function getTotalHxyInRound() public view returns (uint256) {
-        return hxyRoundMintAmount[currentHxyRound] * hxyMintedMultiplier;
+        return _getTotalHxyInRound(currentHxyRound);
     }
 
     function getTotalHxyMinted() public view returns (uint256) {
@@ -103,8 +103,7 @@ contract HXY is ERC20FreezableCapped, HexMoneySettings {
 
     function mintFromExchange(address account, uint256 hexAmount) public {
         require(hasRole(EXCHANGE_ROLE, _msgSender()), "Must be executed from exchange");
-        uint256 hxyAmount = SafeMath.div(hexAmount, currentHxyRoundRate);
-        mint(account, hxyAmount);
+        mint(account, hexAmount);
     }
 
     function mintFromDapp(address account, uint256 amount) public {
@@ -115,6 +114,20 @@ contract HXY is ERC20FreezableCapped, HexMoneySettings {
             mint(account, amount);
         } else {
             uint256 lockPeriod = whitelist.getDappLockPeriod(dappAddress);
+            uint256 freezeUntil = _daysToTimestamp(lockPeriod);
+            mintAndFreezeTo(account, amount, freezeUntil);
+            totalFrozen = SafeMath.add(totalFrozen, amount);
+        }
+    }
+
+    function mintFromReferral(address account, uint256 amount) public {
+        address referralAddress = _msgSender();
+        require(whitelist.isRegisteredReferral(referralAddress), "must be executed from whitelisted dapp");
+
+        if (whitelist.getReferralTradeable(referralAddress)) {
+            mint(account, amount);
+        } else {
+            uint256 lockPeriod = whitelist.getReferralLockPeriod(referralAddress);
             uint256 freezeUntil = _daysToTimestamp(lockPeriod);
             mintAndFreezeTo(account, amount, freezeUntil);
             totalFrozen = SafeMath.add(totalFrozen, amount);
@@ -163,23 +176,14 @@ contract HXY is ERC20FreezableCapped, HexMoneySettings {
         _releaseOnce();
     }
 
-    function mint(address account, uint256 amount) internal {
-        _recordMintedTokens(amount);
-        _mint(account, amount);
+    function mint(address _to, uint256 _amount) internal {
+        _preprocessMint(_to, _amount);
     }
 
     function mintAndFreezeTo(address _to, uint _amount, uint256 _until) internal {
-        _recordMintedTokens(_amount);
-        _mintAndFreezeTo(_to, _amount, _until);
+        _preprocessMintWithFreeze(_to, _amount, _until);
+        //_mintAndFreezeTo(_to, _amount, _until);
         _setNewFreezeData(_msgSender(), block.timestamp, _until, _amount);
-    }
-
-    function _recordMintedTokens(uint256 hxyAmount) internal {
-        totalHxyMinted = SafeMath.add(totalHxyMinted, hxyAmount);
-
-        if (currentHxyRound < maxHxyRounds && totalHxyMinted + hxyAmount >= getRemainingHxyInRound()) {
-                _incrementHxyRateRound();
-        }
     }
 
     function _mintForTeam(address _teamAddress, uint256 _teamLockPeriod) internal {
@@ -190,10 +194,102 @@ contract HXY is ERC20FreezableCapped, HexMoneySettings {
         _mintAndFreezeTo(teamAddress, teamSupply, lockUntil);
     }
 
-    function _incrementHxyRateRound() internal returns (bool) {
-        currentHxyRound++;
+
+    function _preprocessMint(address _account, uint256 _hexAmount) internal {
+        uint256 currentRoundHxyAmount = SafeMath.div(_hexAmount, currentHxyRoundRate);
+        if (currentRoundHxyAmount < getRemainingHxyInRound()) {
+            uint256 hxyAmount = currentRoundHxyAmount;
+            totalHxyMinted = SafeMath.add(totalHxyMinted, hxyAmount);
+            _mint(_account, hxyAmount);
+        } else if (currentRoundHxyAmount == getRemainingHxyInRound()) {
+            uint256 hxyAmount = currentRoundHxyAmount;
+            totalHxyMinted = SafeMath.add(totalHxyMinted, hxyAmount);
+            _mint(_account, hxyAmount);
+
+            _incrementHxyRateRound();
+        } else {
+            uint256 hxyAmount;
+            uint256 hexPaymentAmount;
+            while (hexPaymentAmount < _hexAmount) {
+                uint256 hxyRoundTotal = SafeMath.mul(hxyRoundMintAmount[currentHxyRound], hxyMintedMultiplier);
+
+                uint256 hxyInCurrentRoundMax = SafeMath.sub(hxyRoundTotal, totalHxyMinted);
+                uint256 hexInCurrentRoundMax = SafeMath.mul(hxyInCurrentRoundMax, currentHxyRoundRate);
+
+                uint256 hexInCurrentRound;
+                uint256 hxyInCurrentRound;
+                if (SafeMath.sub(_hexAmount, hexPaymentAmount) < hexInCurrentRoundMax) {
+                    hexInCurrentRound = SafeMath.sub(_hexAmount, hexPaymentAmount);
+                    hxyInCurrentRound = SafeMath.div(hexInCurrentRound, currentHxyRoundRate);
+                } else {
+                    hexInCurrentRound = hexInCurrentRoundMax;
+                    hxyInCurrentRound = hxyInCurrentRoundMax;
+
+                    _incrementHxyRateRound();
+                }
+
+                hxyAmount = SafeMath.add(hxyAmount, hxyInCurrentRound);
+                hexPaymentAmount = SafeMath.add(hexPaymentAmount, hexInCurrentRound);
+
+                totalHxyMinted = SafeMath.add(totalHxyMinted, hxyInCurrentRound);
+            }
+            _mint(_account, hxyAmount);
+        }
+    }
+
+    function _preprocessMintWithFreeze(address _account, uint256 _hexAmount, uint256 _until) internal {
+        uint256 currentRoundHxyAmount = SafeMath.div(_hexAmount, currentHxyRoundRate);
+        if (currentRoundHxyAmount < getRemainingHxyInRound()) {
+            uint256 hxyAmount = currentRoundHxyAmount;
+            totalHxyMinted = SafeMath.add(totalHxyMinted, hxyAmount);
+            _mintAndFreezeTo(_account, hxyAmount, _until);
+        } else if (currentRoundHxyAmount == getRemainingHxyInRound()) {
+            uint256 hxyAmount = currentRoundHxyAmount;
+            totalHxyMinted = SafeMath.add(totalHxyMinted, hxyAmount);
+            _mintAndFreezeTo(_account, hxyAmount, _until);
+
+            _incrementHxyRateRound();
+        } else {
+            uint256 hxyAmount;
+            uint256 hexPaymentAmount;
+            while (hexPaymentAmount < _hexAmount) {
+                uint256 hxyRoundTotal = SafeMath.mul(hxyRoundMintAmount[currentHxyRound], hxyMintedMultiplier);
+
+                uint256 hxyInCurrentRoundMax = SafeMath.sub(hxyRoundTotal, totalHxyMinted);
+                uint256 hexInCurrentRoundMax = SafeMath.mul(hxyInCurrentRoundMax, currentHxyRoundRate);
+
+                uint256 hexInCurrentRound;
+                uint256 hxyInCurrentRound;
+                if (SafeMath.sub(_hexAmount, hexPaymentAmount) < hexInCurrentRoundMax) {
+                    hexInCurrentRound = SafeMath.sub(_hexAmount, hexPaymentAmount);
+                    hxyInCurrentRound = SafeMath.div(hexInCurrentRound, currentHxyRoundRate);
+                } else {
+                    hexInCurrentRound = hexInCurrentRoundMax;
+                    hxyInCurrentRound = hxyInCurrentRoundMax;
+
+                    _incrementHxyRateRound();
+                }
+
+                hxyAmount = SafeMath.add(hxyAmount, hxyInCurrentRound);
+                hexPaymentAmount = SafeMath.add(hexPaymentAmount, hexInCurrentRound);
+
+                totalHxyMinted = SafeMath.add(totalHxyMinted, hxyInCurrentRound);
+            }
+            _mintAndFreezeTo(_account, hxyAmount, _until);
+        }
+    }
+
+    function _getTotalHxyInRound(uint256 _round) public view returns (uint256) {
+        return SafeMath.mul(hxyRoundMintAmount[_round],hxyMintedMultiplier);
+    }
+
+    function _getRemainingHxyInRound(uint256 _round) public view returns (uint256) {
+        return SafeMath.sub(SafeMath.mul(hxyRoundMintAmount[_round], hxyMintedMultiplier), totalHxyMinted);
+    }
+
+    function _incrementHxyRateRound() internal {
+        currentHxyRound = SafeMath.add(currentHxyRound, 1);
         currentHxyRoundRate = SafeMath.mul(hxyRoundBaseRate[currentHxyRound], baseHexToHxyRate);
-        return true;
     }
 
     function _setNewFreezeData(address _to, uint256 _startDate, uint256 _endDate, uint256 _tokenAmount) internal {

@@ -79,11 +79,11 @@ contract HexMoneyContract is ReentrancyGuard, HexMoneySettings {
     }
 
     function claimDividends() public {
-        require(lastHexClaim[_msgSender()] <= dividends.recordTime, "tokens already claimed today");
         _checkUpdateDividends();
         uint256 dailyDividendsAmount = SafeMath.div(SafeMath.mul(dividends.previousDayTokens, hexDividendsPercentage), 100);
         uint256 userFrozenBalance = HXY(hxyToken).freezingBalanceOf(_msgSender());
         require(userFrozenBalance != 0, "must be freezed amount of HXY to claim dividends");
+        require(lastHexClaim[_msgSender()] <= dividends.recordTime, "tokens already claimed today");
 
 
         uint256 totalFrozen = HXY(hxyToken).getTotalFrozen();
