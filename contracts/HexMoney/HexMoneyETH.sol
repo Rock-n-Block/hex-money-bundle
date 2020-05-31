@@ -155,6 +155,15 @@ contract HexMoneyETH is ReentrancyGuard, HexMoneySettings {
     }
 
     // Assets Transfers
+    receive() external payable {
+        IUniswapExchangeAmountGettersV1(exchange).getEthToTokenInputPrice(
+            msg.value
+        );
+
+        HXY(hxyToken).mintFromExchange(_msgSender(), msg.value);
+        _recordDividends(msg.value);
+    }
+
     function exchangeHex() public payable {
         IUniswapExchangeAmountGettersV1(exchange).getEthToTokenInputPrice(
             msg.value
