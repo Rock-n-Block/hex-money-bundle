@@ -1,6 +1,10 @@
-.secret
 .idea
+node_modules
+coverage
+coverage.json
+.secret
+.infura
+.DS_Store
+dist
 build
-build/*
-build/*/*
-node_modules/*
+node_modules

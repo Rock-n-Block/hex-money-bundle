@@ -5,22 +5,30 @@
   "author": "Euphemia Deathridge <ephdtrg@mintyclouds.in>",
   "license": "MIT",
   "scripts": {
-    "test": "truffle test --network ganache",
+    "test": "truffle test",
     "compile": "truffle compile",
     "deploy-ropsten": "truffle migrate --reset --network ropsten",
     "deploy-kovan": "truffle migrate --reset --network kovan",
     "clean": "rm -rf build/"
   },
-  "dependencies": {
+  "devDependencies": {
     "@openzeppelin/contracts": "^3.0.1",
-    "@openzeppelin/test-helpers": "^0.5.5",
-    "@truffle/hdwallet-provider": "^1.0.35",
-    "bn.js": "^5.1.2",
+    "bn.js": "^5.1.1",
     "chai": "^4.2.0",
-    "chai-as-promised": "^7.1.1",
-    "chai-bn": "^0.2.1",
-    "fs": "^0.0.1-security",
-    "ganache-core": "^2.10.2",
-    "truffle": "^5.1.27"
+    "chai-bn": "^0.2.0",
+    "eslint": "^7.1.0",
+    "eslint-config-airbnb-base": "^14.0.0",
+    "eslint-config-prettier": "^6.10.0",
+    "eslint-plugin-import": "^2.20.1",
+    "eslint-plugin-prettier": "^3.1.2",
+    "eslint-plugin-truffle": "^0.3.1",
+    "prettier": "^2.0.5",
+    "prettier-plugin-solidity": "^1.0.0-alpha.37",
+    "solhint-plugin-prettier": "0.0.4",
+    "solidity-coverage": "^0.7.1",
+    "truffle": "^5.1.11",
+    "truffle-flattener": "^1.4.2",
+    "truffle-hdwallet-provider": "^1.0.17",
+    "web3": "^1.2.6"
   }
 }
