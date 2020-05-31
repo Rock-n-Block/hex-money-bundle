@@ -8,7 +8,7 @@
  *
  * truffleframework.com/docs/advanced/configuration
  *
- * To deploy via Infura you'll need a wallet provider (like @truffle/hdwallet-provider)
+ * To deploy via Infura you'll need a wallet provider (like truffle-hdwallet-provider)
  * to sign your transactions before they're sent to a remote public node. Infura accounts
  * are available for free at: infura.io/register.
  *
@@ -18,15 +18,18 @@
  *
  */
 
+// const HDWalletProvider = require("truffle-hdwallet-provider");
 
-const HDWalletProvider = require('@truffle/hdwallet-provider');
-const infuraKey = "fj4jll3k.....";
+// const fs = require("fs");
+// const mnemonic = fs
+//     .readFileSync(".secret")
+//     .toString()
+//     .trim();
 
-const fs = require('fs');
-const mnemonic = fs.readFileSync(".secret").toString().trim();
-
-const ganache = require('ganache-core');
-const BN = require('bn.js');
+// const infuraKey = fs
+//     .readFileSync(".infura")
+//     .toString()
+//     .trim();
 
 module.exports = {
   /**
@@ -40,41 +43,77 @@ module.exports = {
    */
 
   networks: {
-    ganache: {
-        network_id: '*', // eslint-disable-line camelcase
-        provider: ganache.provider({
-            total_accounts: 6, // eslint-disable-line camelcase
-            default_balance_ether: new BN(1e+5), // eslint-disable-line camelcase
-            mnemonic: 'mywish',
-            time: new Date('2020-04-21T12:00:00Z'),
-            debug: false,
-            // ,logger: console
-        }),
+    // Useful for testing. The `development` name is special - truffle uses it by default
+    // if it's defined here and no other network is specified at the command line.
+    // You should run a client (like ganache-cli, geth or parity) in a separate terminal
+    // tab if you use this network and you must also set the `host`, `port` and `network_id`
+    // options below to some value.
+    //
+    // development: {
+    //     host: "127.0.0.1", // Localhost (default: none)
+    //     port: 8545, // Standard Ethereum port (default: none)
+    //     network_id: "*" // Any network (default: none)
+    // },
+    coverage: {
+      host: 'localhost',
+      network_id: '*',
+      port: 8554, // <-- If you change this, also set the port option in .solcover.js.
+      gas: 0xfffffffffff, // <-- Use this high gas value
+      gasPrice: 0x01, // <-- Use this low gas price
     },
-    localhost: {
-        host: 'localhost',
-        port: 8545,
-        network_id: '*', // eslint-disable-line camelcase
-    },
+    // Another network with more advanced options...
+    // advanced: {
+    // port: 8777,             // Custom port
+    // network_id: 1342,       // Custom network
+    // gas: 8500000,           // Gas sent with each transaction (default: ~6700000)
+    // gasPrice: 20000000000,  // 20 gwei (in wei) (default: 100 gwei)
+    // from: <address>,        // Account to send txs from (default: accounts[0])
+    // websockets: true        // Enable EventEmitter interface for web3 (default: false)
+    // },
+    // Useful for deploying to a public network.
+    // NB: It's important to wrap the provider as a function.
     ropsten: {
-        provider: () => new HDWalletProvider(mnemonic, `https://ropsten.infura.io/v3/7a3e8131ad6d42b89d19677154d03008`),
-        network_id: 3,       // Ropsten's id
-        gas: 5500000,        // Ropsten has a lower block limit than mainnet
-        gasPrice: 10000000000,
-        //confirmations: 2,    // # of confs to wait between deployments. (default: 0)
-        timeoutBlocks: 200,  // # of blocks before a deployment times out  (minimum/default: 50)
-        skipDryRun: true     // Skip dry run before migrations? (default: false for public nets )
+      provider: () =>
+        new HDWalletProvider(
+          mnemonic,
+          `https://ropsten.infura.io/v3/${infuraKey}`,
+        ),
+      network_id: 3, // Ropsten's id
+      gas: 5500000, // Ropsten has a lower block limit than mainnet
+      confirmations: 2, // # of confs to wait between deployments. (default: 0)
+      timeoutBlocks: 200, // # of blocks before a deployment times out  (minimum/default: 50)
+      skipDryRun: true, // Skip dry run before migrations? (default: false for public nets )
     },
     kovan: {
-        provider: () => new HDWalletProvider(mnemonic, `https://kovan.infura.io/v3/7ca80e3732bf4b9da67ebd25fa384b20`),
-        network_id: 3,       // Ropsten's id
-        gas: 5500000,        // Ropsten has a lower block limit than mainnet
-        gasPrice: 10000000000,
-        //confirmations: 2,    // # of confs to wait between deployments. (default: 0)
-        timeoutBlocks: 200,  // # of blocks before a deployment times out  (minimum/default: 50)
-        skipDryRun: true     // Skip dry run before migrations? (default: false for public nets )
+      provider: () =>
+        new HDWalletProvider(
+          mnemonic,
+          `https://kovan.infura.io/v3/${infuraKey}`,
+        ),
+      network_id: 42, // Kovan's id
+      gas: 5500000, // Kovan has a lower block limit than mainnet
+      confirmations: 2, // # of confs to wait between deployments. (default: 0)
+      timeoutBlocks: 200, // # of blocks before a deployment times out  (minimum/default: 50)
+      skipDryRun: true, // Skip dry run before migrations? (default: false for public nets )
     },
-
+    live: {
+      provider: () =>
+        new HDWalletProvider(
+          mnemonic,
+          `https://mainnet.infura.io/v3/${infuraKey}`,
+        ),
+      network_id: 1, // Mainnet's id
+      gas: 1, // gas block limit
+      confirmations: 2, // # of confs to wait between deployments. (default: 0)
+      timeoutBlocks: 200, // # of blocks before a deployment times out  (minimum/default: 50)
+      skipDryRun: false, // Skip dry run before migrations? (default: false for public nets )
+    },
+    // Useful for private networks
+    // private: {
+    // provider: () => new HDWalletProvider(mnemonic, `https://network.io`),
+    // network_id: 2111,   // This network is yours, in the cloud.
+    // production: true    // Treats this network as if it was a public net. (default: false)
+    // }
   },
 
   // Set default mocha options here, use special reporters etc.
@@ -85,15 +124,16 @@ module.exports = {
   // Configure your compilers
   compilers: {
     solc: {
-       version: "0.6.2",    // Fetch exact version from solc-bin (default: truffle's version)
-       docker: false,        // Use "0.5.1" you've installed locally with docker (default: false)
-       settings: {          // See the solidity docs for advice about optimization and evmVersion
-        optimizer: {
-          enabled: false,
-          runs: 200
-        },
-        evmVersion: "constantinople"
-       }
-    }
-  }
-}
+      version: '0.6.2', // Fetch exact version from solc-bin (default: truffle's version)
+      // docker: true,        // Use "0.5.1" you've installed locally with docker (default: false)
+      // settings: {          // See the solidity docs for advice about optimization and evmVersion
+      optimizer: {
+        enabled: true,
+        runs: 200,
+      },
+      //  evmVersion: "byzantium"
+      // }
+    },
+  },
+  plugins: ['solidity-coverage'],
+};

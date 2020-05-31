@@ -2,36 +2,9 @@ pragma solidity ^0.6.0;
 
 
 /**
- * @dev Interface of the Uniswap Exchange Getterts V1.
+ * @dev Interface of the Uniswap Exchange Amount Getterts V1.
  */
-interface IUniswapGettersExchangeV1 {
-    /**
-     * @dev Pricing function for converting between ETH and Tokens.
-     * @param inputAmount Amount of ETH or Tokens being sold.
-     * @param inputReserve Amount of ETH or Tokens (input type) in exchange reserves.
-     * @param outputReserve Amount of ETH or Tokens (output type) in exchange reserves.
-     * @return Amount of ETH or Tokens bought.
-     */
-
-    function getInputPrice(
-        uint256 inputAmount,
-        uint256 inputReserve,
-        uint256 outputReserve
-    ) external view returns (uint256);
-
-    /**
-     * @dev Pricing function for converting between ETH and Tokens.
-     * @param outputAmount Amount of ETH or Tokens being bought.
-     * @param inputReserve Amount of ETH or Tokens (input type) in exchange reserves.
-     * @param outputReserve Amount of ETH or Tokens (output type) in exchange reserves.
-     * @return Amount of ETH or Tokens sold.
-     */
-    function getOutputPrice(
-        uint256 outputAmount,
-        uint256 inputReserve,
-        uint256 outputReserve
-    ) external view returns (uint256);
-
+interface IUniswapExchangeAmountGettersV1 {
     /**
      * @notice Public price function for ETH to Token trades with an exact input.
      * @param ethSold Amount of ETH sold.

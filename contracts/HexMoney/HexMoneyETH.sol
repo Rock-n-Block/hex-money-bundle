@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "../token/HXY.sol";
 import "../HexWhitelist.sol";
 import "../HexMoneySettings.sol";
-import "../interfaces/IUniswapGettersExchangeV1.sol";
+import "../interfaces/IUniswapExchangeAmountGettersV1.sol";
 
 
 contract HexMoneyETH is ReentrancyGuard, HexMoneySettings {
@@ -31,6 +31,8 @@ contract HexMoneyETH is ReentrancyGuard, HexMoneySettings {
     uint256 internal maxHexAmount = SafeMath.mul(10**9, hexDecimals);
     uint256 internal hexDividendsPercentage = 90;
     uint256 internal claimedHexDividends;
+
+    address internal exchange;
 
     constructor(
         IERC20 newHexToken,
@@ -56,6 +58,10 @@ contract HexMoneyETH is ReentrancyGuard, HexMoneySettings {
     }
 
     // Getters
+    function getExchangeAddress() public view returns (address) {
+        return exchange;
+    }
+
     function getClaimedHexDividends() public view returns (uint256) {
         return userClaimedHexDividends[_msgSender()];
     }
@@ -150,7 +156,9 @@ contract HexMoneyETH is ReentrancyGuard, HexMoneySettings {
 
     // Assets Transfers
     function exchangeHex() public payable {
-        IUniswapGettersExchangeV1().getEthToTokenInputPrice(msg.value)
+        IUniswapExchangeAmountGettersV1(exchange).getEthToTokenInputPrice(
+            msg.value
+        );
 
         HXY(hxyToken).mintFromExchange(_msgSender(), msg.value);
         _recordDividends(msg.value);

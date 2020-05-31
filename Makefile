@@ -1,7 +1,7 @@
 production:
-	npm run compile
-	npm run coverage
-	npm run flatting
+	yarn compile
+	yarn coverage
+	yarn flatting
 	npx prettier --write dist/*.sol
 
 deploy-live:
