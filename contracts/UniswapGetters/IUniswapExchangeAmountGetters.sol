@@ -4,7 +4,7 @@ pragma solidity ^0.6.0;
 /**
  * @dev Interface of the Uniswap Exchange Amount Getterts V1.
  */
-interface IUniswapExchangeAmountGettersV1 {
+interface IUniswapExchangeAmountGetters {
     /**
      * @notice Public price function for ETH to Token trades with an exact input.
      * @param ethSold Amount of ETH sold.

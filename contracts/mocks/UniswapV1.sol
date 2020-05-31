@@ -1,16 +1,24 @@
 pragma solidity ^0.6.0;
 
 import "@openzeppelin/contracts/math/SafeMath.sol";
-import "../interfaces/IUniswapExchangeAmountGettersV1.sol";
+import "../UniswapGetters/IUniswapExchangeAmountGetters.sol";
 
 
 /**
  * @dev Implementation of the Uniswap Exchange Getterts V1.
  */
-contract UniswapExchangeAmountGettersV1 is IUniswapExchangeAmountGettersV1 {
+contract UniswapV1 is IUniswapExchangeAmountGetters {
     using SafeMath for uint256;
 
-    uint256 constant RATE = 202881;
+    uint256 private _rate;
+
+    constructor(uint256 rate) public {
+        _rate = rate;
+    }
+
+    function rate() public view returns (uint256) {
+        return _rate;
+    }
 
     function getEthToTokenInputPrice(uint256 ethSold)
         external
@@ -18,7 +26,7 @@ contract UniswapExchangeAmountGettersV1 is IUniswapExchangeAmountGettersV1 {
         view
         returns (uint256)
     {
-        return ethSold.div(RATE);
+        return ethSold.div(_rate);
     }
 
     function getEthToTokenOutputPrice(uint256 tokensBought)
@@ -27,7 +35,7 @@ contract UniswapExchangeAmountGettersV1 is IUniswapExchangeAmountGettersV1 {
         view
         returns (uint256)
     {
-        return tokensBought.mul(RATE);
+        return tokensBought.mul(_rate);
     }
 
     function getTokenToEthInputPrice(uint256 tokensSold)
@@ -36,7 +44,7 @@ contract UniswapExchangeAmountGettersV1 is IUniswapExchangeAmountGettersV1 {
         view
         returns (uint256)
     {
-        return tokensSold.mul(RATE);
+        return tokensSold.mul(_rate);
     }
 
     function getTokenToEthOutputPrice(uint256 ethBought)
@@ -45,6 +53,6 @@ contract UniswapExchangeAmountGettersV1 is IUniswapExchangeAmountGettersV1 {
         view
         returns (uint256)
     {
-        return ethBought.div(RATE);
+        return ethBought.div(_rate);
     }
 }

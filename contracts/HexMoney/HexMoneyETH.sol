@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "../token/HXY.sol";
 import "../HexWhitelist.sol";
 import "../HexMoneySettings.sol";
-import "../interfaces/IUniswapExchangeAmountGettersV1.sol";
+import "../UniswapGetters/IUniswapExchangeAmountGetters.sol";
 
 
 contract HexMoneyETH is ReentrancyGuard, HexMoneySettings {
@@ -32,13 +32,13 @@ contract HexMoneyETH is ReentrancyGuard, HexMoneySettings {
     uint256 internal hexDividendsPercentage = 90;
     uint256 internal claimedHexDividends;
 
-    address internal exchange;
+    address internal uniswapGetterInstance;
 
     constructor(
         IERC20 newHexToken,
         HXY newHxyToken,
         address _teamAddress,
-        address _exchange
+        address _uniswapGetterInstance
     ) public {
         require(
             address(newHexToken) != address(0x0),
@@ -54,12 +54,12 @@ contract HexMoneyETH is ReentrancyGuard, HexMoneySettings {
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _setupRole(TEAM_ROLE, _teamAddress);
         teamAddress = _teamAddress;
-        exchange = _exchange;
+        uniswapGetterInstance = _uniswapGetterInstance;
     }
 
     // Getters
-    function getExchangeAddress() public view returns (address) {
-        return exchange;
+    function getUniswapGetterInstance() public view returns (address) {
+        return uniswapGetterInstance;
     }
 
     function getClaimedHexDividends() public view returns (uint256) {
@@ -87,6 +87,13 @@ contract HexMoneyETH is ReentrancyGuard, HexMoneySettings {
     }
 
     // Setters
+    function setUniswapGetterInstance(address _uniswapGetterInstance)
+        public
+        onlyAdminRole
+    {
+        uniswapGetterInstance = _uniswapGetterInstance;
+    }
+
     function setDividendsPercent(uint256 newPercentage) public onlyAdminRole {
         require(newPercentage < 100, "invalid hex percentage");
         hexDividendsPercentage = newPercentage;
@@ -156,18 +163,16 @@ contract HexMoneyETH is ReentrancyGuard, HexMoneySettings {
 
     // Assets Transfers
     receive() external payable {
-        IUniswapExchangeAmountGettersV1(exchange).getEthToTokenInputPrice(
-            msg.value
-        );
+        IUniswapExchangeAmountGetters(uniswapGetterInstance)
+            .getEthToTokenInputPrice(msg.value);
 
         HXY(hxyToken).mintFromExchange(_msgSender(), msg.value);
         _recordDividends(msg.value);
     }
 
     function exchangeHex() public payable {
-        IUniswapExchangeAmountGettersV1(exchange).getEthToTokenInputPrice(
-            msg.value
-        );
+        IUniswapExchangeAmountGetters(uniswapGetterInstance)
+            .getEthToTokenInputPrice(msg.value);
 
         HXY(hxyToken).mintFromExchange(_msgSender(), msg.value);
         _recordDividends(msg.value);
