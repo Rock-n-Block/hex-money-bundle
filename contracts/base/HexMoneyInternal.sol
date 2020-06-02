@@ -1,28 +1,18 @@
 pragma solidity ^0.6.2;
 
+import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
-import "./HexWhitelist.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "../whitelist/HexWhitelist.sol";
 
-contract HexMoneySettings is AccessControl  {
-    bytes32 public constant TEAM_ROLE = keccak256("TEAM_ROLE");
+contract HexMoneyInternal is AccessControl, ReentrancyGuard  {
     uint256 public constant SECONDS_IN_DAY = 86400;
-
-    address internal teamAddress;
 
     HexWhitelist internal whitelist;
 
     modifier onlyAdminRole() {
-        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Must have admin role to setup");
+        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Must have admin role");
         _;
-    }
-
-    modifier onlyTeamRole() {
-        require(hasRole(TEAM_ROLE, _msgSender()), "Must have admin role to setup");
-        _;
-    }
-
-    function getTeamAddress() public view returns (address) {
-        return teamAddress;
     }
 
     function getWhitelistAddress() public view returns (address) {

@@ -1,15 +1,14 @@
 pragma solidity ^0.6.2;
 
-
-import "@openzeppelin/contracts/access/AccessControl.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
 import "./ERC20FreezableCapped.sol";
-import "../WhitelistLib.sol";
-import "../HexWhitelist.sol";
-import "../HexMoneySettings.sol";
 
-contract HXY is ERC20FreezableCapped, HexMoneySettings {
-    bytes32 public constant EXCHANGE_ROLE = keccak256("EXCHANGE_ROLE");
+import "../base/HexMoneyInternal.sol";
+import "../base/HexMoneyTeam.sol";
+
+import "../whitelist/WhitelistLib.sol";
+import "../whitelist/HexWhitelist.sol";
+
+contract HXY is ERC20FreezableCapped, HexMoneyTeam, HexMoneyInternal {
     uint256 public constant MINIMAL_FREEZE_PERIOD = 7;    // 7 days
 
     using WhitelistLib for WhitelistLib.AllowedAddress;
@@ -96,15 +95,6 @@ contract HXY is ERC20FreezableCapped, HexMoneySettings {
         return SafeMath.mul(SafeMath.div(frozenTokens, 1000), interestDays);
     }
 
-    function setExchange(address newExchangeAddress) public onlyAdminRole {
-        require(newExchangeAddress != address(0x0), "Invalid exchange address");
-        _setupRole(EXCHANGE_ROLE, newExchangeAddress);
-    }
-
-    function mintFromExchange(address account, uint256 hexAmount) public {
-        require(hasRole(EXCHANGE_ROLE, _msgSender()), "Must be executed from exchange");
-        mint(account, hexAmount);
-    }
 
     function mintFromDapp(address account, uint256 amount) public {
         address dappAddress = _msgSender();
@@ -172,9 +162,9 @@ contract HXY is ERC20FreezableCapped, HexMoneySettings {
         totalFrozen = SafeMath.sub(totalFrozen, frozenTokens);
     }
 
-    function releaseFrozenTeam() public onlyTeamRole {
-        _releaseOnce();
-    }
+//    function releaseFrozenTeam() public onlyTeamRole {
+//        _releaseOnce();
+//    }
 
     function mint(address _to, uint256 _amount) internal {
         _preprocessMint(_to, _amount);

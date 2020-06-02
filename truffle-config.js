@@ -18,18 +18,14 @@
  *
  */
 
-// const HDWalletProvider = require("truffle-hdwallet-provider");
+const HDWalletProvider = require('@truffle/hdwallet-provider');
+const infuraKey = "fj4jll3k.....";
 
-// const fs = require("fs");
-// const mnemonic = fs
-//     .readFileSync(".secret")
-//     .toString()
-//     .trim();
+const fs = require('fs');
+const mnemonic = fs.readFileSync(".secret").toString().trim();
 
-// const infuraKey = fs
-//     .readFileSync(".infura")
-//     .toString()
-//     .trim();
+const ganache = require('ganache-core');
+const BN = require('bn.js');
 
 module.exports = {
   /**
@@ -107,6 +103,17 @@ module.exports = {
       confirmations: 2, // # of confs to wait between deployments. (default: 0)
       timeoutBlocks: 200, // # of blocks before a deployment times out  (minimum/default: 50)
       skipDryRun: false, // Skip dry run before migrations? (default: false for public nets )
+    },
+    ganache: {
+      network_id: '*', // eslint-disable-line camelcase
+      provider: ganache.provider({
+          total_accounts: 6, // eslint-disable-line camelcase
+          default_balance_ether: new BN(1e+5), // eslint-disable-line camelcase
+          mnemonic: 'mywish',
+          time: new Date('2020-04-21T12:00:00Z'),
+          debug: false,
+          // ,logger: console
+      }),
     },
     // Useful for private networks
     // private: {
