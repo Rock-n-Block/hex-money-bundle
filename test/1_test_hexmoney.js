@@ -21,6 +21,10 @@ const HXYToken = artifacts.require('./token/HXY.sol')
 const HEXWhitelist = artifacts.require("./whitelist/HexWhitelist.sol")
 const HEXDividends = artifacts.require('./HexMoneyDividends.sol');
 const HEXExchangeHEX = artifacts.require('./exchange/HexMoneyExchangeHEX.sol');
+const HEXExchangeETH = artifacts.require('./exchange/HexMoneyExchangeETH.sol');
+
+const UniswapV1 = artifacts.require('UniswapV1');
+const UniswapExchangeAmountGettersV1 = artifacts.require('UniswapExchangeAmountGettersV1',);
 
 
 contract('exchange', accounts => {
@@ -48,7 +52,7 @@ contract('exchange', accounts => {
         hxyTeamTokenAmount = (12 * 10 ** 14).toString();
         hxyTeamTimeLock = (365).toString();
         hexToken = await HEXToken.new(OWNER, hxyTeamTokenAmount);
-        hxyToken = await HXYToken.new(HXY_TEAM_ADDRESS, hxyTeamTimeLock);
+        hxyToken = await HXYToken.new(HXY_TEAM_ADDRESS, hxyTeamTimeLock, OWNER, OWNER);
         hexWhitelist = await HEXWhitelist.new({from: OWNER});
         (await hxyToken.balanceOf(HXY_TEAM_ADDRESS)).should.be.bignumber.equal(new BN(hxyTeamTokenAmount));
         hexDividends = await HEXDividends.new(hexToken.address, hxyToken.address, OWNER);
@@ -93,15 +97,15 @@ contract('exchange', accounts => {
 
     it('#2 check base values', async () => {
         currentRate = await hxyToken.getCurrentHxyRate();
-        currentRate.should.be.bignumber.equal(new BN(10 ** 3));
+        currentRate.should.be.bignumber.equal(new BN(2 * 10 ** 3));
         remainingHxyInRound  = await hxyToken.getRemainingHxyInRound();
-        remainingHxyInRound.should.be.bignumber.equal(new BN(3 * 10 ** 6))
+
+        remainingHxyInRound.should.be.bignumber.equal(new BN(3 * 10 ** 14))
     })
 
-
     it('#3 check basic exchange', async () => {
-        const hexAmount = new BN(10 ** 3);
-        const hxyAmount = new BN(1);
+        const hexAmount = new BN(2 * 10 ** 11);
+        const hxyAmount = new BN(10 ** 8);
         await hexToken.mint(BUYER_1, hexAmount);
         const hexBalanceBefore = await hexToken.balanceOf(BUYER_1);
         hexBalanceBefore.should.be.bignumber.equal(hexAmount);
@@ -114,9 +118,41 @@ contract('exchange', accounts => {
         (await hxyToken.balanceOf(BUYER_1)).should.be.bignumber.equals(hxyAmount);
     })
 
+    /*
+    it('#3 check basic exchange for ETH', async () => {
+        hexExchangeETH = await HEXExchangeETH.new(hxyToken.address, hexDividends.address);
+        (await hxyToken.getWhitelistAddress()).should.be.equals(hexWhitelist.address);
+        await hexWhitelist.registerDappTradeable(hexExchangeETH.address, eth.toString(), {from: OWNER}).should.not.be.rejected;
+        (await hexWhitelist.isRegisteredDapp(hexExchangeETH.address)).should.be.true;
+        (await hexWhitelist.getDappTradeable(hexExchangeETH.address)).should.be.true;
+
+        const uniswapRate = new BN(`${205209}`, 10);
+        const uniswapV1 = await UniswapV1.new(uniswapRate);
+        const uniswapProxy = await UniswapExchangeAmountGettersV1.new(uniswapV1.address);
+
+        await hexExchangeETH.setUniswapGetterInstance(uniswapProxy.address);
+        (await hexExchangeETH.getUniswapGetterInstance()).should.be.equals(uniswapProxy.address);
+        const hexAmount = await hexExchangeETH.getConvertedAmount(eth.toString());
+
+        //const hxyAmount = new BN(1);
+        const balanceBefore = await web3.eth.getBalance(BUYER_1);
+        const hxyBalanceBefore = await hxyToken.balanceOf(BUYER_1);
+
+        console.log((await hexExchangeETH.getConvertedAmount(eth.toString())).toString());
+        await hexExchangeETH.sendTransaction({from: BUYER_1, value: eth}).should.not.be.rejected;
+
+        const balanceAfter = await web3.eth.getBalance(BUYER_1);
+        balanceAfter.should.be.bignumber.below(balanceBefore);
+        const hxyBalanceAfter = await hxyToken.balanceOf(BUYER_1);
+        hxyBalanceAfter.should.be.bignumber.above(hxyBalanceBefore);
+    })
+
+
+     */
+
     it('#4 check rate round switching', async () => {
-        const expectedFirstRoundRate = new BN(10 ** 3);
-        const expectedSecondRoundRate = expectedFirstRoundRate.mul(new BN(2));
+        const expectedFirstRoundRate = new BN(2 * 10 ** 3);
+        const expectedSecondRoundRate = new BN(3 * 10 ** 3);
         const firstRoundRate = await hxyToken.getCurrentHxyRate();
         firstRoundRate.should.be.bignumber.equal(expectedFirstRoundRate);
         const firstRoundAmount = (await hxyToken.getRemainingHxyInRound()).mul(firstRoundRate);
@@ -140,7 +176,7 @@ contract('exchange', accounts => {
         const secondRoundRate = await hxyToken.getCurrentHxyRate();
         secondRoundRate.should.be.bignumber.equal(expectedSecondRoundRate);
         const remainingInFirstRound = await hxyToken.getRemainingHxyInRound();
-        remainingInFirstRound.should.be.bignumber.equals(new BN(3 * 10 ** 6));
+        remainingInFirstRound.should.be.bignumber.equals(new BN(3 * 10 ** 14));
 
         // second round
         const secondRoundAmount = expectedSecondRoundRate;
@@ -158,8 +194,8 @@ contract('exchange', accounts => {
 
     it('#5 check rate adjusted if more than remained in round', async () => {
         const firstRoundRate = await hxyToken.getCurrentHxyRate();
-        const expectedFirstRoundRate = new BN(10 ** 3);
-        const expectedSecondRoundRate = expectedFirstRoundRate.mul(new BN(2));
+        const expectedFirstRoundRate = new BN(2 * 10 ** 3);
+        const expectedSecondRoundRate = new BN(3 * 10 ** 3);
         const tokensinFirstRound = await hxyToken.getRemainingHxyInRound()
         const hexAmount = tokensinFirstRound.mul(firstRoundRate);
         const overflowAmount = hexAmount.div(new BN(100));
@@ -187,7 +223,7 @@ contract('exchange', accounts => {
         expectedTotal.should.be.bignumber.equals(hxyAmountAfter);
     })
 
-    it('#5 check dividends if freezed', async () => {
+    it('#6 check dividends if freezed', async () => {
         const rate = await hxyToken.getCurrentHxyRate();
         const hexAmount = (await hxyToken.getRemainingHxyInRound()).mul(rate);
 
@@ -197,17 +233,20 @@ contract('exchange', accounts => {
 
         const hxyBalance = await hxyToken.balanceOf(BUYER_1);
         const freezeTime = (await getBlockchainTimestamp()) + (10 * day);
+
         await hxyToken.freezeHxy(hxyBalance.toString(), freezeTime, {from: BUYER_1}).should.not.be.rejected;
 
         await increaseTime(day + 10);
+        const hexBalanceBefore = await hexToken.balanceOf(BUYER_1);
         await hexDividends.claimDividends({from: BUYER_1}).should.not.be.rejected;
 
         const hexBalanceAfter = await hexToken.balanceOf(BUYER_1);
-        const dividendsPercent = await hexDividends.getDividendsPercentage();
-        hexBalanceAfter.should.be.bignumber.equals(new BN(hexAmount * dividendsPercent / 100));
+        //const dividendsPercent = await hexDividends.getDividendsPercentage();
+
+        hexBalanceAfter.should.be.bignumber.above(hexBalanceBefore);
     })
 
-    it('#6 check dividends if not freezed', async () => {
+    it('#7 check dividends if not freezed', async () => {
         const rate = await hxyToken.getCurrentHxyRate();
         const hexAmount = (await hxyToken.getRemainingHxyInRound()).mul(rate);
 
@@ -221,7 +260,7 @@ contract('exchange', accounts => {
         await hexDividends.claimDividends({from: BUYER_1}).should.be.rejected;
     })
 
-    it('#5 check dividends claiming twice', async () => {
+    it('#8 check dividends claiming twice', async () => {
         const rate = await hxyToken.getCurrentHxyRate();
         const hexAmount = (await hxyToken.getRemainingHxyInRound()).mul(rate);
 
@@ -234,12 +273,15 @@ contract('exchange', accounts => {
         await hxyToken.freezeHxy(hxyBalance.toString(), freezeTime, {from: BUYER_1}).should.not.be.rejected;
 
         await increaseTime(day + 10);
+        const hexBalanceBefore = await hexToken.balanceOf(BUYER_1);
         await hexDividends.claimDividends({from: BUYER_1}).should.not.be.rejected;
 
         const hexBalanceAfter = await hexToken.balanceOf(BUYER_1);
-        const dividendsPercent = await hexDividends.getDividendsPercentage();
-        hexBalanceAfter.should.be.bignumber.equals(new BN(hexAmount * dividendsPercent / 100));
+        //const dividendsPercent = await hexDividends.getDividendsPercentage();
+        hexBalanceAfter.should.be.bignumber.above(hexBalanceBefore);
 
         await hexDividends.claimDividends({from: BUYER_1}).should.be.rejected;
+
     })
+
 });

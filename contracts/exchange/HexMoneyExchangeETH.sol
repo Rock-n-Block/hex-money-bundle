@@ -17,8 +17,16 @@ contract HexMoneyExchangeETH is HexMoneyExchangeBase {
         maxAmount = SafeMath.mul(10 ** 9, decimals);
     }
 
+    function getUniswapGetterInstance() public view returns (address) {
+        return uniswapGetterInstance;
+    }
+
     function setUniswapGetterInstance(address newUniswapGetterInstance)  public onlyAdminRole {
         uniswapGetterInstance = newUniswapGetterInstance;
+    }
+
+    function getConvertedAmount(uint256 _amount) public view returns (uint256) {
+        return IUniswapExchangeAmountGetters(uniswapGetterInstance).getEthToTokenInputPrice(_amount);
     }
 
         // Assets Transfers
@@ -26,14 +34,14 @@ contract HexMoneyExchangeETH is HexMoneyExchangeBase {
         uint256 hexAmount = IUniswapExchangeAmountGetters(uniswapGetterInstance).getEthToTokenInputPrice(msg.value);
 
         HXY(hxyToken).mintFromDapp(_msgSender(), hexAmount);
-        _addToDividends(hexAmount);
+        _addToDividends(msg.value);
     }
 
     function exchangeEth() public payable {
         uint256 hexAmount = IUniswapExchangeAmountGetters(uniswapGetterInstance).getEthToTokenInputPrice(msg.value);
 
         HXY(hxyToken).mintFromDapp(_msgSender(), hexAmount);
-        _addToDividends(hexAmount);
+        _addToDividends(msg.value);
     }
 
     function _addToDividends(uint256 _amount) internal override {

@@ -71,8 +71,9 @@ contract HexMoneyDividends is HexMoneyTeam, HexMoneyInternal {
         //_setInitialRecordTime(_recordTime);
     }
 
-    function getClaimedHexDividends() public view returns (uint256) {
-        return userClaimedHexDividends[_msgSender()];
+    function getClaimedDividends() public view returns (uint256[4] memory) {
+        DividendsUserClaimed memory divs = userClaimedDividends[_msgSender()];
+        return [divs.hexAmount, divs.hxyAmount, divs.ethAmount, divs.lastClaim];
     }
 
 
