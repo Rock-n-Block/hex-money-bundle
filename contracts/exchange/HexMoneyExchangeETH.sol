@@ -45,7 +45,7 @@ contract HexMoneyExchangeETH is HexMoneyExchangeBase {
     }
 
     function _addToDividends(uint256 _amount) internal override {
-        dividendsContract.transfer(_amount);
+        HexMoneyDividends(dividendsContract).recordDividendsETH{value: _amount}();
     }
 
 

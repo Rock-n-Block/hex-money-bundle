@@ -71,9 +71,26 @@ contract HexMoneyDividends is HexMoneyTeam, HexMoneyInternal {
         //_setInitialRecordTime(_recordTime);
     }
 
-    function getClaimedDividends() public view returns (uint256[4] memory) {
-        DividendsUserClaimed memory divs = userClaimedDividends[_msgSender()];
+    function getClaimedDividends(address _addr) public view returns (uint256[4] memory) {
+        DividendsUserClaimed memory divs = userClaimedDividends[_addr];
         return [divs.hexAmount, divs.hxyAmount, divs.ethAmount, divs.lastClaim];
+    }
+
+    function getAvailableDividends(address _addr) public view returns(uint256[3] memory) {
+        uint256 userFrozenBalance = HXY(hxyToken).freezingBalanceOf(_addr);
+        uint256 hexAmount;
+        uint256 hxyAmount;
+        uint256 ethAmount;
+
+        if (userFrozenBalance != 0) {
+            uint256 totalFrozen = HXY(hxyToken).getTotalFrozen();
+
+            uint256 userFrozenPercentage = SafeMath.div(userFrozenBalance, totalFrozen);
+            hexAmount = _getClaimAmount(dividends.hexDividends.previousDayTokens, userFrozenPercentage);
+            hxyAmount = _getClaimAmount(dividends.hxyDividends.previousDayTokens, userFrozenPercentage);
+            ethAmount = _getClaimAmount(dividends.ethDividends.previousDayTokens, userFrozenPercentage);
+        }
+        return [hexAmount, hxyAmount, ethAmount];
     }
 
 
@@ -108,6 +125,7 @@ contract HexMoneyDividends is HexMoneyTeam, HexMoneyInternal {
     }
 
     function recordDividendsETH() public payable {
+        require(msg.value != 0, "value must be supplied in call to record dividends");
         _postprocessDividends(dividends.ethDividends, msg.value);
     }
 

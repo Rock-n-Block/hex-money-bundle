@@ -118,7 +118,6 @@ contract('exchange', accounts => {
         (await hxyToken.balanceOf(BUYER_1)).should.be.bignumber.equals(hxyAmount);
     })
 
-    /*
     it('#3 check basic exchange for ETH', async () => {
         hexExchangeETH = await HEXExchangeETH.new(hxyToken.address, hexDividends.address);
         (await hxyToken.getWhitelistAddress()).should.be.equals(hexWhitelist.address);
@@ -138,7 +137,6 @@ contract('exchange', accounts => {
         const balanceBefore = await web3.eth.getBalance(BUYER_1);
         const hxyBalanceBefore = await hxyToken.balanceOf(BUYER_1);
 
-        console.log((await hexExchangeETH.getConvertedAmount(eth.toString())).toString());
         await hexExchangeETH.sendTransaction({from: BUYER_1, value: eth}).should.not.be.rejected;
 
         const balanceAfter = await web3.eth.getBalance(BUYER_1);
@@ -146,9 +144,6 @@ contract('exchange', accounts => {
         const hxyBalanceAfter = await hxyToken.balanceOf(BUYER_1);
         hxyBalanceAfter.should.be.bignumber.above(hxyBalanceBefore);
     })
-
-
-     */
 
     it('#4 check rate round switching', async () => {
         const expectedFirstRoundRate = new BN(2 * 10 ** 3);
