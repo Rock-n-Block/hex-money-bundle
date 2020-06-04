@@ -31,6 +31,7 @@ contract HexMoneyExchangeETH is HexMoneyExchangeBase {
 
         // Assets Transfers
     receive() external payable {
+        require(msg.value > 0, "cannot be zero payment");
         uint256 hexAmount = IUniswapExchangeAmountGetters(uniswapGetterInstance).getEthToTokenInputPrice(msg.value);
 
         HXY(hxyToken).mintFromDapp(_msgSender(), hexAmount);
@@ -38,6 +39,7 @@ contract HexMoneyExchangeETH is HexMoneyExchangeBase {
     }
 
     function exchangeEth() public payable {
+        require(msg.value > 0, "cannot be zero payment");
         uint256 hexAmount = IUniswapExchangeAmountGetters(uniswapGetterInstance).getEthToTokenInputPrice(msg.value);
 
         HXY(hxyToken).mintFromDapp(_msgSender(), hexAmount);

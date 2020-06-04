@@ -11,6 +11,8 @@ contract HexMoneyDividends is HexMoneyTeam, HexMoneyInternal {
     IERC20 internal hexToken;
     HXY internal hxyToken;
 
+    address payable secondTeamAddress;
+
     bool internal _initialRecordTimeSet;
 
     mapping (address => uint256) internal userClaimedHexDividends;
@@ -22,6 +24,7 @@ contract HexMoneyDividends is HexMoneyTeam, HexMoneyInternal {
     struct DividendsCurrency {
         uint256 teamTokens;
         uint256 previousDayTokens;
+        uint256 claimedTodayTokens;
         uint256 currentDayTokens;
     }
 
@@ -32,7 +35,7 @@ contract HexMoneyDividends is HexMoneyTeam, HexMoneyInternal {
         uint256 recordTime;
     }
 
-    struct DividendsTotalClaimed {
+    struct DividendsClaimed {
         uint256 hexAmount;
         uint256 hxyAmount;
         uint256 ethAmount;
@@ -54,21 +57,24 @@ contract HexMoneyDividends is HexMoneyTeam, HexMoneyInternal {
     }
 
     Dividends internal dividends;
-    DividendsTotalClaimed internal totalClaimedDividends;
+    DividendsClaimed internal totalClaimedDividends;
 
     mapping(address => DividendsUserClaimed) internal userClaimedDividends;
 
-    constructor (IERC20 newHexToken, HXY newHxyToken, address _teamAddress) public {
+    constructor (IERC20 newHexToken, HXY newHxyToken, address payable _teamAddress, address payable _secondTeamAddress) public {
         require(address(newHexToken) != address(0x0), "hex token address should not be empty");
         require(address(newHxyToken) != address(0x0), "hxy token address should not be empty");
+        require(address(_teamAddress) != address(0x0), "team address should not be empty");
+        require(address(_secondTeamAddress) != address(0x0), "team address should not be empty");
         hexToken = newHexToken;
         hxyToken = newHxyToken;
 
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _setupRole(TEAM_ROLE, _teamAddress);
         teamAddress = _teamAddress;
+        secondTeamAddress = _secondTeamAddress;
 
-        //_setInitialRecordTime(_recordTime);
+        //setDeployInitialRecordTime();
     }
 
     function getClaimedDividends(address _addr) public view returns (uint256[4] memory) {
@@ -93,6 +99,9 @@ contract HexMoneyDividends is HexMoneyTeam, HexMoneyInternal {
         return [hexAmount, hxyAmount, ethAmount];
     }
 
+    function getRecordTime() public view returns (uint256) {
+        return dividends.recordTime;
+    }
 
     function getDividendsPercentage() public view returns (uint256) {
         return dividendsPercentage;
@@ -154,6 +163,7 @@ contract HexMoneyDividends is HexMoneyTeam, HexMoneyInternal {
 
             userClaimedDividends[_msgSender()].hexAmount = SafeMath.add(userClaimedDividends[_msgSender()].hexAmount, amount);
             totalClaimedDividends.hexAmount = SafeMath.add(totalClaimedDividends.hexAmount, amount);
+            dividends.hexDividends.claimedTodayTokens = SafeMath.add(dividends.hexDividends.claimedTodayTokens, amount);
         }
     }
 
@@ -165,6 +175,7 @@ contract HexMoneyDividends is HexMoneyTeam, HexMoneyInternal {
 
             userClaimedDividends[_msgSender()].hxyAmount = SafeMath.add(userClaimedDividends[_msgSender()].hxyAmount, amount);
             totalClaimedDividends.hxyAmount = SafeMath.add(totalClaimedDividends.hxyAmount, amount);
+            dividends.hxyDividends.claimedTodayTokens = SafeMath.add(dividends.hxyDividends.claimedTodayTokens, amount);
         }
     }
 
@@ -176,6 +187,7 @@ contract HexMoneyDividends is HexMoneyTeam, HexMoneyInternal {
 
             userClaimedDividends[_msgSender()].ethAmount = SafeMath.add(userClaimedDividends[_msgSender()].ethAmount, amount);
             totalClaimedDividends.ethAmount = SafeMath.add(totalClaimedDividends.ethAmount, amount);
+            dividends.ethDividends.claimedTodayTokens = SafeMath.add(dividends.ethDividends.claimedTodayTokens, amount);
         }
     }
 
@@ -184,10 +196,8 @@ contract HexMoneyDividends is HexMoneyTeam, HexMoneyInternal {
         return SafeMath.mul(dailyDividendsAmount,userFrozenPercentage);
     }
 
-    function claimPastDividendsTeam() public onlyTeamRole {
-        uint256 amount = dividends.hexDividends.teamTokens;
-        require(IERC20(hexToken).transferFrom(address(this), teamAddress, amount), "fail in transfer past dividends");
-        dividends.hexDividends.teamTokens = 0;
+    function manualCheckUpdateDividends() public {
+        _checkUpdateDividendsAll();
     }
 
     function setHexToken(address newHexToken) public onlyAdminRole {
@@ -212,6 +222,10 @@ contract HexMoneyDividends is HexMoneyTeam, HexMoneyInternal {
         _initialRecordTimeSet = true;
     }
 
+    function setDeployInitialRecordTime() internal {
+        dividends.recordTime = SafeMath.add(block.timestamp, SafeMath.mul(1, SECONDS_IN_DAY));
+    }
+
     function _setInitialRecordTime(uint256 _recordTime) internal {
         dividends.recordTime = _recordTime;
     }
@@ -222,25 +236,60 @@ contract HexMoneyDividends is HexMoneyTeam, HexMoneyInternal {
     }
 
     function _checkUpdateDividendsAll() internal {
-        _checkUpdateDividends(dividends.hexDividends);
-        _checkUpdateDividends(dividends.hxyDividends);
-        _checkUpdateDividends(dividends.ethDividends);
+        uint256 teamAmountHex = _checkUpdateDividends(dividends.hexDividends);
+        uint256 teamAmountHxy = _checkUpdateDividends(dividends.hxyDividends);
+        uint256 teamAmountEth = _checkUpdateDividends(dividends.ethDividends);
+
+        _transferTeamHex(teamAmountHex);
+        _transferTeamHxy(teamAmountHxy);
+        _transferTeamEth(teamAmountEth);
     }
 
-    function _checkUpdateDividends(DividendsCurrency storage currencyDividends) internal {
+    function _checkUpdateDividends(DividendsCurrency storage currencyDividends) internal returns (uint256 teamAmount) {
         if (block.timestamp > dividends.recordTime) {
             uint256 daysPassed = SafeMath.div(SafeMath.sub(block.timestamp, dividends.recordTime), SECONDS_IN_DAY);
             dividends.recordTime = SafeMath.add(dividends.recordTime, SafeMath.mul(daysPassed, SECONDS_IN_DAY));
+
+            uint256 prevDayTokens;
             if (daysPassed <= 1) {
-                currencyDividends.teamTokens = SafeMath.add(currencyDividends.teamTokens, currencyDividends.previousDayTokens);
+                prevDayTokens = currencyDividends.previousDayTokens;
                 currencyDividends.previousDayTokens = currencyDividends.currentDayTokens;
             } else {
-                uint256 prevAndCurrentTokens = SafeMath.add(currencyDividends.previousDayTokens, currencyDividends.currentDayTokens);
-                currencyDividends.teamTokens = SafeMath.add(currencyDividends.teamTokens, prevAndCurrentTokens);
+                prevDayTokens = SafeMath.add(currencyDividends.previousDayTokens, currencyDividends.currentDayTokens);
                 currencyDividends.previousDayTokens = 0;
             }
-            currencyDividends.currentDayTokens = 0;
+
+            uint256 userDividendsAmount = SafeMath.div(SafeMath.mul(prevDayTokens, dividendsPercentage), 100);
+            uint256 unclaimedAmount;
+            if (currencyDividends.claimedTodayTokens < userDividendsAmount) {
+                unclaimedAmount = SafeMath.sub(userDividendsAmount, currencyDividends.claimedTodayTokens);
+                teamAmount = SafeMath.div(SafeMath.mul(unclaimedAmount, 80), 100);
+
+                uint256 toNextDay = SafeMath.sub(unclaimedAmount, teamAmount);
+                currencyDividends.currentDayTokens = toNextDay;
+            } else {
+                 teamAmount = SafeMath.sub(prevDayTokens, userDividendsAmount);
+                 currencyDividends.currentDayTokens = 0;
+            }
 
         }
+    }
+
+    function _transferTeamHex(uint256 _amount) internal {
+        uint256 halfAmount = SafeMath.div(_amount, 2);
+        IERC20(hexToken).transfer(teamAddress, halfAmount);
+        IERC20(hexToken).transfer(secondTeamAddress, halfAmount);
+    }
+
+    function _transferTeamHxy(uint256 _amount) internal {
+        uint256 halfAmount = SafeMath.div(_amount, 2);
+        HXY(hxyToken).transfer(teamAddress, halfAmount);
+        HXY(hxyToken).transfer(secondTeamAddress, halfAmount);
+    }
+
+    function _transferTeamEth(uint256 _amount) internal {
+        uint256 halfAmount = SafeMath.div(_amount, 2);
+        teamAddress.transfer(halfAmount);
+        secondTeamAddress.transfer(halfAmount);
     }
 }

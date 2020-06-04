@@ -5,7 +5,7 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 abstract contract HexMoneyTeam is AccessControl  {
     bytes32 public constant TEAM_ROLE = keccak256("TEAM_ROLE");
 
-    address internal teamAddress;
+    address payable internal teamAddress;
 
     modifier onlyTeamRole() {
         require(hasRole(TEAM_ROLE, _msgSender()), "Must have admin role to setup");

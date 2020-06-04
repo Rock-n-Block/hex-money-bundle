@@ -72,7 +72,7 @@ module.exports = {
       provider: () =>
         new HDWalletProvider(
           mnemonic,
-          `https://ropsten.infura.io/v3/7a3e8131ad6d42b89d19677154d03008`,
+          `https://ropsten.infura.io/v3/7ca80e3732bf4b9da67ebd25fa384b20`,
         ),
       network_id: 3, // Ropsten's id
       gas: 7900000, // Ropsten has a lower block limit than mainnet
@@ -107,7 +107,7 @@ module.exports = {
     ganache: {
       network_id: '*', // eslint-disable-line camelcase
       provider: ganache.provider({
-          total_accounts: 6, // eslint-disable-line camelcase
+          total_accounts: 15, // eslint-disable-line camelcase
           default_balance_ether: new BN(1e+5), // eslint-disable-line camelcase
           mnemonic: 'mywish',
           time: new Date('2020-04-21T12:00:00Z'),

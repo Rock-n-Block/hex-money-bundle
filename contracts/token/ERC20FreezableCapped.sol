@@ -1,12 +1,14 @@
 pragma solidity ^0.6.2;
 
 import "./ERC20.sol";
-//import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "../base/HexMoneyInternal.sol";
 
 /**
  * @dev Extension of {ERC20} that adds a cap to the supply of tokens.
  */
-abstract contract ERC20FreezableCapped is ERC20 {
+abstract contract ERC20FreezableCapped is ERC20, HexMoneyInternal {
+    uint256 public constant MINIMAL_FREEZE_PERIOD = 7;    // 7 days
+
     // freezing chains
     mapping (bytes32 => uint256) internal chains;
     // freezing amounts for each chain
@@ -90,32 +92,32 @@ abstract contract ERC20FreezableCapped is ERC20 {
      *      and depends on how many freezes _to address already has.
      * @param _to Address to which token will be freeze.
      * @param _amount Amount of token to freeze.
-     * @param _until Release date, must be in future.
+     * @param _start Start  date.
      */
-    function _freezeTo(address _to, uint _amount, uint256 _until) internal {
+    function _freezeTo(address _to, uint _amount, uint256 _start) internal {
         require(_to != address(0));
         require(_amount <= _balances[msg.sender]);
 
         _balances[msg.sender] = _balances[msg.sender].sub(_amount);
 
-        bytes32 currentKey = toKey(_to, _until);
+        bytes32 currentKey = toKey(_to, _start);
         freezings[currentKey] = freezings[currentKey].add(_amount);
         freezingBalance[_to] = freezingBalance[_to].add(_amount);
 
-        _freeze(_to, _until);
+        _freeze(_to, _start);
         emit Transfer(msg.sender, _to, _amount);
-        emit Freezed(_to, _until, _amount);
+        emit Freezed(_to, _start, _amount);
     }
 
-    function _mintAndFreezeTo(address _to, uint _amount, uint256 _until) internal returns (bool) {
+    function _mintAndFreezeTo(address _to, uint _amount, uint256 _start) internal returns (bool) {
         _totalSupply = _totalSupply.add(_amount);
 
-        bytes32 currentKey = toKey(_to, _until);
+        bytes32 currentKey = toKey(_to, _start);
         freezings[currentKey] = freezings[currentKey].add(_amount);
         freezingBalance[_to] = freezingBalance[_to].add(_amount);
 
-        _freeze(_to, _until);
-        emit Freezed(_to, _until, _amount);
+        _freeze(_to, _start);
+        emit Freezed(_to, _start, _amount);
         emit Transfer(msg.sender, _to, _amount);
         return true;
 
@@ -124,11 +126,13 @@ abstract contract ERC20FreezableCapped is ERC20 {
     /**
      * @dev release first available freezing tokens.
      */
-    function _releaseOnce() internal {
+    function _releaseOnce(uint256 _timeLock) internal {
         bytes32 headKey = toKey(msg.sender, 0);
         uint256 head = chains[headKey];
         require(head != 0);
-        require(uint256(block.timestamp) > head);
+
+        uint256 timeLock = _daysToTimestampFrom(head, _timeLock);
+        require(uint256(block.timestamp) > timeLock);
         bytes32 currentKey = toKey(msg.sender, head);
 
         uint256 next = chains[currentKey];
@@ -148,20 +152,20 @@ abstract contract ERC20FreezableCapped is ERC20 {
         emit Released(msg.sender, amount);
     }
 
-    /**
-     * @dev release all available for release freezing tokens. Gas usage is not deterministic!
-     * @return tokens How many tokens was released
-     */
-    function _releaseAll() internal returns (uint tokens) {
-        uint release;
-        uint balance;
-        (release, balance) = getFreezing(msg.sender, 0);
-        while (release != 0 && block.timestamp > release) {
-            _releaseOnce();
-            tokens += balance;
-            (release, balance) = getFreezing(msg.sender, 0);
-        }
-    }
+//    /**
+//     * @dev release all available for release freezing tokens. Gas usage is not deterministic!
+//     * @return tokens How many tokens was released
+//     */
+//    function _releaseAll() internal returns (uint tokens) {
+//        uint release;
+//        uint balance;
+//        (release, balance) = getFreezing(msg.sender, 0);
+//        while (release != 0 && block.timestamp > release) {
+//            _releaseOnce();
+//            tokens += balance;
+//            (release, balance) = getFreezing(msg.sender, 0);
+//        }
+//    }
 
     function toKey(address _addr, uint _release) internal pure returns (bytes32 result) {
         // WISH masc to increase entropy
@@ -172,21 +176,21 @@ abstract contract ERC20FreezableCapped is ERC20 {
         }
     }
 
-    function _freeze(address _to, uint256 _until) internal {
-        require(_until > block.timestamp);
-        bytes32 key = toKey(_to, _until);
+    function _freeze(address _to, uint256 _start) internal {
+        require(_start >= block.timestamp);
+        bytes32 key = toKey(_to, _start);
         bytes32 parentKey = toKey(_to, uint256(0));
         uint256 next = chains[parentKey];
 
         if (next == 0) {
-            chains[parentKey] = _until;
+            chains[parentKey] = _start;
             return;
         }
 
         bytes32 nextKey = toKey(_to, next);
         uint parent;
 
-        while (next != 0 && _until > next) {
+        while (next != 0 && _start > next) {
             parent = next;
             parentKey = nextKey;
 
@@ -194,7 +198,7 @@ abstract contract ERC20FreezableCapped is ERC20 {
             nextKey = toKey(_to, next);
         }
 
-        if (_until == next) {
+        if (_start == next) {
             return;
         }
 
@@ -202,8 +206,25 @@ abstract contract ERC20FreezableCapped is ERC20 {
             chains[key] = next;
         }
 
-        chains[parentKey] = _until;
+        chains[parentKey] = _start;
     }
+
+    function _daysToTimestampFrom(uint256 from, uint256 lockDays) internal pure returns(uint256) {
+        return SafeMath.add(from, SafeMath.mul(lockDays, SECONDS_IN_DAY));
+    }
+
+    function _daysToTimestamp(uint256 lockDays) internal view returns(uint256) {
+        return _daysToTimestampFrom(block.timestamp, lockDays);
+    }
+
+    function _getBaseLockDays() internal view returns (uint256) {
+        return _daysToTimestamp(MINIMAL_FREEZE_PERIOD);
+    }
+
+    function _getBaseLockDaysFrom(uint256 from) internal pure returns (uint256) {
+        return _daysToTimestampFrom(from, MINIMAL_FREEZE_PERIOD);
+    }
+
 
     /**
      * @dev See {ERC20-_beforeTokenTransfer}.

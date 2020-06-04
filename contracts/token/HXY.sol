@@ -2,21 +2,19 @@ pragma solidity ^0.6.2;
 
 import "./ERC20FreezableCapped.sol";
 
-import "../base/HexMoneyInternal.sol";
 import "../base/HexMoneyTeam.sol";
 
 import "../whitelist/WhitelistLib.sol";
 import "../whitelist/HexWhitelist.sol";
 
-contract HXY is ERC20FreezableCapped, HexMoneyTeam, HexMoneyInternal {
-    uint256 public constant MINIMAL_FREEZE_PERIOD = 7;    // 7 days
+contract HXY is ERC20FreezableCapped, HexMoneyTeam {
 
     using WhitelistLib for WhitelistLib.AllowedAddress;
 
     // latest freezing info for user
     struct latestFreezing {
         uint256 startDate;
-        uint256 endDate;
+        uint256 lockDays;
         uint256 tokenAmount;
     }
 
@@ -29,6 +27,13 @@ contract HXY is ERC20FreezableCapped, HexMoneyTeam, HexMoneyInternal {
     uint256 internal liquidSupply = SafeMath.mul(6, 10 ** 14);
     uint256 internal lockedSupply = SafeMath.mul(6, 10 ** 14);
     uint256 internal migratedSupply = SafeMath.mul(750, 10 ** 11);
+
+    uint256[10] internal lockedSupplyDays;
+    bool[10] internal lockedSupplyPackClaimed;
+    uint256 internal lockedSupplyFreezingStarted;
+
+    address internal lockedSupplyAddress;
+    address internal liquidSupplyAddress;
 
     // total amounts variables
     uint256 internal totalMinted;
@@ -49,7 +54,7 @@ contract HXY is ERC20FreezableCapped, HexMoneyTeam, HexMoneyInternal {
 
 
 
-    constructor(address _teamAddress, uint256 _teamLockPeriod, address _liqSupAddress, address _lockSupAddress)
+    constructor(address payable _teamAddress,  address _liqSupAddress, address _lockSupAddress, address _migratedSupplyAddress)
     ERC20FreezableCapped(SafeMath.mul(60,  10 ** 14))        // cap = 60,000,000
     ERC20("HXY", "HXY")
     public
@@ -57,9 +62,10 @@ contract HXY is ERC20FreezableCapped, HexMoneyTeam, HexMoneyInternal {
         _setupDecimals(8);
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
 
-        _premintForTeam(_teamAddress, _teamLockPeriod);
+        _premintForTeam(_teamAddress, 365);
         _premintLiquidSupply(_liqSupAddress);
         _premintLockedSupply(_lockSupAddress);
+        _premintMigratedSupply(_migratedSupplyAddress);
     }
 
     function getRemainingHxyInRound() public view returns (uint256) {
@@ -98,18 +104,24 @@ contract HXY is ERC20FreezableCapped, HexMoneyTeam, HexMoneyInternal {
         return teamLockPeriod;
     }
 
+    function getLockedSupply() public view returns (uint256) {
+        return freezingBalanceOf(lockedSupplyAddress);
+    }
+
+    function getLockedSupplyAddress() public view returns (address) {
+        return lockedSupplyAddress;
+    }
+
     function getLatestFreezingData(address _addr) public view returns (uint256, uint256, uint256) {
         latestFreezing memory data = latestFreezingData[_addr];
-        return (data.startDate, data.endDate, data.tokenAmount);
+        return (data.startDate, data.lockDays, data.tokenAmount);
     }
 
     function getCurrentInterestAmount(address _addr) public view returns (uint256) {
         uint256 frozenTokens = latestFreezingData[_addr].tokenAmount;
         if (frozenTokens != 0) {
             uint256 startFreezeDate = latestFreezingData[_addr].startDate;
-            uint256 endFreezeDate = latestFreezingData[_addr].endDate;
-            uint256 interestEnd = (block.timestamp >= endFreezeDate) ? endFreezeDate : block.timestamp;
-            uint256 interestDays = SafeMath.div(SafeMath.sub(interestEnd, startFreezeDate), SECONDS_IN_DAY);
+            uint256 interestDays = SafeMath.div(SafeMath.sub(block.timestamp, startFreezeDate), SECONDS_IN_DAY);
             return SafeMath.mul(SafeMath.div(frozenTokens, 1000), interestDays);
         } else {
             return 0;
@@ -142,10 +154,7 @@ contract HXY is ERC20FreezableCapped, HexMoneyTeam, HexMoneyInternal {
         }
     }
 
-    function freezeHxy(uint256 lockAmount, uint256 freezeUntil) public {
-        uint256 freezeDays = SafeMath.div(SafeMath.sub(freezeUntil, block.timestamp), SECONDS_IN_DAY);
-        require(freezeDays >= MINIMAL_FREEZE_PERIOD, "must be more than 7 days");
-
+    function freezeHxy(uint256 lockAmount) public {
         uint256 startFreezeDate = latestFreezingData[_msgSender()].startDate;
         if (startFreezeDate != 0) {
             uint256 lockDate = _daysToTimestampFrom(startFreezeDate, MINIMAL_FREEZE_PERIOD);
@@ -154,27 +163,27 @@ contract HXY is ERC20FreezableCapped, HexMoneyTeam, HexMoneyInternal {
             }
         }
 
-        _freezeTo(_msgSender(), lockAmount, _getBaseLockDays());
-        _setNewFreezeData(_msgSender(), block.timestamp, freezeUntil, lockAmount);
+        _freezeTo(_msgSender(), lockAmount, uint256(block.timestamp));
+        _setNewFreezeData(_msgSender(), block.timestamp, MINIMAL_FREEZE_PERIOD, lockAmount);
         totalFrozen = SafeMath.add(totalFrozen, lockAmount);
         totalCirculating = SafeMath.sub(totalCirculating, lockAmount);
     }
 
     function releaseFrozen() public {
         require(!hasRole(TEAM_ROLE, _msgSender()), "Cannot be released from team account");
+        require(_msgSender() != lockedSupplyAddress, "Cannot be released from locked supply address");
 
         uint256 startFreezeDate = latestFreezingData[_msgSender()].startDate;
         uint256 lockDate = _daysToTimestampFrom(startFreezeDate, MINIMAL_FREEZE_PERIOD);
         require(block.timestamp > lockDate, "minimum period not exceeded");
 
-        uint256 endFreezeDate = latestFreezingData[_msgSender()].endDate;
-        uint256 interestEnd = (block.timestamp >= endFreezeDate) ? endFreezeDate : block.timestamp;
-        uint256 interestDays = SafeMath.div(SafeMath.sub(interestEnd, startFreezeDate), SECONDS_IN_DAY);
+        uint256 interestDays = SafeMath.div(SafeMath.sub(block.timestamp, startFreezeDate), SECONDS_IN_DAY);
 
         uint256 frozenTokens = latestFreezingData[_msgSender()].tokenAmount;
         uint256 interestAmount = SafeMath.mul(SafeMath.div(frozenTokens, 1000), interestDays);
 
-        _releaseOnce();
+        uint256 timeLock = latestFreezingData[_msgSender()].lockDays;
+        _releaseOnce(timeLock);
 
         _setNewFreezeData(_msgSender(), 0, 0, 0);
         mint(_msgSender(), interestAmount);
@@ -185,27 +194,42 @@ contract HXY is ERC20FreezableCapped, HexMoneyTeam, HexMoneyInternal {
     }
 
     function releaseFrozenTeam() public onlyTeamRole {
-        _releaseOnce();
+        _releaseOnce(365);
+    }
+
+    function releaseLockedSupply() public {
+        require(_msgSender() == lockedSupplyAddress, "Only for releasing locked supply");
+
+        for (uint256 i = 0; i < 10; i++) {
+            if (!lockedSupplyPackClaimed[i]) {
+                uint256 packDays = lockedSupplyDays[i];
+                if (block.timestamp > _daysToTimestampFrom(lockedSupplyFreezingStarted, packDays)) {
+                    _releaseOnce(packDays);
+                    lockedSupplyPackClaimed[i] = true;
+                }
+            }
+        }
     }
 
     function mint(address _to, uint256 _amount) internal {
         _preprocessMint(_to, _amount);
     }
 
-    function mintAndFreezeTo(address _to, uint _amount, uint256 _until) internal {
-        _preprocessMintWithFreeze(_to, _amount, _until);
+    function mintAndFreezeTo(address _to, uint _amount, uint256 _lockDays) internal {
+        _preprocessMintWithFreeze(_to, _amount);
         //_mintAndFreezeTo(_to, _amount, _until);
-        _setNewFreezeData(_msgSender(), block.timestamp, _until, _amount);
+        _setNewFreezeData(_msgSender(), block.timestamp, _lockDays, _amount);
     }
 
-    function _premintForTeam(address _teamAddress, uint256 _teamLockPeriod) internal {
+    function _premintForTeam(address payable _teamAddress, uint256 _teamLockPeriod) internal {
         require(_teamAddress != address(0x0), "team address cannot be zero");
         require(_teamLockPeriod > 0, "team lock period cannot be zero");
         _setupRole(TEAM_ROLE, _teamAddress);
         teamAddress = _teamAddress;
         teamLockPeriod = _teamLockPeriod;
-        uint256 lockUntil = _daysToTimestamp(teamLockPeriod);
-        _mintAndFreezeTo(teamAddress, teamSupply, lockUntil);
+        //uint256 lockDays = _daysToTimestamp(teamLockPeriod);
+        _mintAndFreezeTo(teamAddress, teamSupply, block.timestamp);
+        _setNewFreezeData(_teamAddress, block.timestamp, _teamLockPeriod, teamSupply);
     }
 
     function _premintLiquidSupply(address _liqSupAddress) internal {
@@ -215,12 +239,20 @@ contract HXY is ERC20FreezableCapped, HexMoneyTeam, HexMoneyInternal {
 
     function _premintLockedSupply(address _lockSupAddress) internal {
         require(_lockSupAddress != address(0x0), "liquid supply address cannot be zero");
+        lockedSupplyAddress = _lockSupAddress;
 
-        for (uint256 i = 1; i <= 10; i++) {
-            uint256 month = SafeMath.mul(30, SECONDS_IN_DAY);
-            uint256 lockDays = _daysToTimestamp(SafeMath.mul(month, i));
-            _mintAndFreezeTo(_lockSupAddress, SafeMath.div(lockedSupply, 10), lockDays);
+        for (uint256 i = 0; i < 10; i++) {
+            uint256 lockDays = SafeMath.mul(30, SafeMath.add(i, 1));
+            _mintAndFreezeTo(_lockSupAddress, SafeMath.div(lockedSupply, 10), block.timestamp);
+            lockedSupplyDays[i] = lockDays;
         }
+
+        lockedSupplyFreezingStarted = block.timestamp;
+    }
+
+    function _premintMigratedSupply(address _migratedSupAddress) internal {
+        require(_migratedSupAddress != address(0x0), "migrated supply address cannot be zero");
+        _mint(_migratedSupAddress, migratedSupply);
     }
 
 
@@ -271,15 +303,15 @@ contract HXY is ERC20FreezableCapped, HexMoneyTeam, HexMoneyInternal {
         }
     }
 
-    function _preprocessMintWithFreeze(address _account, uint256 _hexAmount, uint256 _until) internal {
+    function _preprocessMintWithFreeze(address _account, uint256 _hexAmount) internal {
         uint256 currentRoundHxyAmount = SafeMath.div(_hexAmount, currentHxyRoundRate);
         if (currentRoundHxyAmount < getRemainingHxyInRound()) {
             uint256 hxyAmount = currentRoundHxyAmount;
             totalMinted = SafeMath.add(totalMinted, hxyAmount);
-            _mintAndFreezeTo(_account, hxyAmount, _until);
+            _mintAndFreezeTo(_account, hxyAmount, uint256(block.timestamp));
         } else if (currentRoundHxyAmount == getRemainingHxyInRound()) {
             uint256 hxyAmount = currentRoundHxyAmount;
-            _mintAndFreezeTo(_account, hxyAmount, _until);
+            _mintAndFreezeTo(_account, hxyAmount, uint256(block.timestamp));
 
             totalMinted = SafeMath.add(totalMinted, hxyAmount);
 
@@ -310,7 +342,7 @@ contract HXY is ERC20FreezableCapped, HexMoneyTeam, HexMoneyInternal {
 
                 totalMinted = SafeMath.add(totalMinted, hxyInCurrentRound);
             }
-            _mintAndFreezeTo(_account, hxyAmount, _until);
+            _mintAndFreezeTo(_account, hxyAmount, uint256(block.timestamp));
         }
     }
 
@@ -327,22 +359,10 @@ contract HXY is ERC20FreezableCapped, HexMoneyTeam, HexMoneyInternal {
         currentHxyRoundRate = SafeMath.mul(hxyRoundBaseRate[currentHxyRound], baseHexToHxyRate);
     }
 
-    function _setNewFreezeData(address _to, uint256 _startDate, uint256 _endDate, uint256 _tokenAmount) internal {
+    function _setNewFreezeData(address _to, uint256 _startDate, uint256 _lockDays, uint256 _tokenAmount) internal {
         latestFreezingData[_to].startDate = _startDate;
-        latestFreezingData[_to].endDate = _endDate;
+        latestFreezingData[_to].lockDays = _lockDays;
         latestFreezingData[_to].tokenAmount = _tokenAmount;
-    }
-
-    function _getBaseLockDays() internal view returns (uint256) {
-        return _daysToTimestamp(MINIMAL_FREEZE_PERIOD);
-    }
-
-    function _daysToTimestamp(uint256 lockDays) internal view returns(uint256) {
-        return _daysToTimestampFrom(block.timestamp, lockDays);
-    }
-
-    function _daysToTimestampFrom(uint256 from, uint256 lockDays) internal pure returns(uint256) {
-        return SafeMath.add(from, SafeMath.mul(lockDays, SECONDS_IN_DAY));
     }
 
     function _toDecimals(uint256 amount) internal view returns (uint256) {
