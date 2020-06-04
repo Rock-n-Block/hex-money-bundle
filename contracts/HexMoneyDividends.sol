@@ -41,19 +41,11 @@ contract HexMoneyDividends is HexMoneyTeam, HexMoneyInternal {
         uint256 ethAmount;
     }
 
-//    struct DividendsUserClaimedCurrency {
-//        uint256 amount;
-//        uint256 lastClaim;
-//    }
-
     struct DividendsUserClaimed {
         uint256 hexAmount;
         uint256 hxyAmount;
         uint256 ethAmount;
         uint256 lastClaim;
-//        DividendsUserClaimedCurrency storage hex;
-//        DividendsUserClaimedCurrency storage hxy;
-//        DividendsUserClaimedCurrency storage eth;
     }
 
     Dividends internal dividends;
@@ -236,16 +228,24 @@ contract HexMoneyDividends is HexMoneyTeam, HexMoneyInternal {
     }
 
     function _checkUpdateDividendsAll() internal {
-        uint256 teamAmountHex = _checkUpdateDividends(dividends.hexDividends);
-        uint256 teamAmountHxy = _checkUpdateDividends(dividends.hxyDividends);
-        uint256 teamAmountEth = _checkUpdateDividends(dividends.ethDividends);
+        (uint256 teamAmountHex, bool haveUnclaimedHex) = _checkUpdateDividends(dividends.hexDividends);
+        (uint256 teamAmountHxy, bool haveUnclaimedHxy) = _checkUpdateDividends(dividends.hxyDividends);
+        (uint256 teamAmountEth, bool haveUnclaimedEth) = _checkUpdateDividends(dividends.ethDividends);
 
-        _transferTeamHex(teamAmountHex);
-        _transferTeamHxy(teamAmountHxy);
-        _transferTeamEth(teamAmountEth);
+        if (teamAmountHex > 0) {
+            _transferTeamHex(teamAmountHex, haveUnclaimedHex);
+        }
+
+        if (teamAmountHxy > 0) {
+            _transferTeamHxy(teamAmountHxy, haveUnclaimedHxy);
+        }
+
+        if (teamAmountEth > 0) {
+            _transferTeamEth(teamAmountEth, haveUnclaimedEth);
+         }
     }
 
-    function _checkUpdateDividends(DividendsCurrency storage currencyDividends) internal returns (uint256 teamAmount) {
+    function _checkUpdateDividends(DividendsCurrency storage currencyDividends) internal returns (uint256 teamAmount, bool haveUnclaimed) {
         if (block.timestamp > dividends.recordTime) {
             uint256 daysPassed = SafeMath.div(SafeMath.sub(block.timestamp, dividends.recordTime), SECONDS_IN_DAY);
             dividends.recordTime = SafeMath.add(dividends.recordTime, SafeMath.mul(daysPassed, SECONDS_IN_DAY));
@@ -264,32 +264,45 @@ contract HexMoneyDividends is HexMoneyTeam, HexMoneyInternal {
             if (currencyDividends.claimedTodayTokens < userDividendsAmount) {
                 unclaimedAmount = SafeMath.sub(userDividendsAmount, currencyDividends.claimedTodayTokens);
                 teamAmount = SafeMath.div(SafeMath.mul(unclaimedAmount, 80), 100);
+                haveUnclaimed = true;
 
                 uint256 toNextDay = SafeMath.sub(unclaimedAmount, teamAmount);
                 currencyDividends.currentDayTokens = toNextDay;
             } else {
                  teamAmount = SafeMath.sub(prevDayTokens, userDividendsAmount);
                  currencyDividends.currentDayTokens = 0;
+                 haveUnclaimed = false;
             }
 
         }
     }
 
-    function _transferTeamHex(uint256 _amount) internal {
-        uint256 halfAmount = SafeMath.div(_amount, 2);
-        IERC20(hexToken).transfer(teamAddress, halfAmount);
-        IERC20(hexToken).transfer(secondTeamAddress, halfAmount);
+    function _transferTeamHex(uint256 _amount, bool _haveUnclaimed) internal {
+        (uint256 firstAmount, uint256 secondAmount) = _getTeamAmounts(_amount, _haveUnclaimed);
+        IERC20(hexToken).transfer(teamAddress, firstAmount);
+        IERC20(hexToken).transfer(secondTeamAddress, secondAmount);
     }
 
-    function _transferTeamHxy(uint256 _amount) internal {
-        uint256 halfAmount = SafeMath.div(_amount, 2);
-        HXY(hxyToken).transfer(teamAddress, halfAmount);
-        HXY(hxyToken).transfer(secondTeamAddress, halfAmount);
+    function _transferTeamHxy(uint256 _amount, bool _haveUnclaimed) internal {
+        (uint256 firstAmount, uint256 secondAmount) = _getTeamAmounts(_amount, _haveUnclaimed);
+        HXY(hxyToken).transfer(teamAddress, firstAmount);
+        HXY(hxyToken).transfer(secondTeamAddress, secondAmount);
     }
 
-    function _transferTeamEth(uint256 _amount) internal {
-        uint256 halfAmount = SafeMath.div(_amount, 2);
-        teamAddress.transfer(halfAmount);
-        secondTeamAddress.transfer(halfAmount);
+    function _transferTeamEth(uint256 _amount, bool _haveUnclaimed) internal {
+        (uint256 firstAmount, uint256 secondAmount) = _getTeamAmounts(_amount, _haveUnclaimed);
+        teamAddress.transfer(firstAmount);
+        secondTeamAddress.transfer(secondAmount);
+    }
+
+    function _getTeamAmounts(uint256 fullAmount, bool haveUnclaimed) internal pure returns (uint256 firstAmount, uint256 secondAmount) {
+        if (haveUnclaimed) {
+            firstAmount = SafeMath.div(SafeMath.mul(fullAmount, 9), 10);
+            secondAmount = SafeMath.sub(fullAmount, firstAmount);
+        } else {
+            firstAmount = SafeMath.div(fullAmount, 2);
+            secondAmount = SafeMath.sub(fullAmount, firstAmount);
+        }
+
     }
 }
