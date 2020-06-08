@@ -75,6 +75,18 @@ abstract contract ERC20FreezableCapped is ERC20, HexMoneyInternal {
     function cap() public view returns (uint256) {
         return _cap;
     }
+    
+    function getUserFreezings(address _user) public view returns (bytes32[] memory userFreezings) {
+        return freezingsByUser[_user];
+    }
+
+    function getFreezingById(bytes32 freezingId) public view returns (address user, uint256 startDate, uint256 freezeDays, uint256 freezeAmount) {
+        Freezing memory userFreeze = freezings[freezingId];
+        user = userFreeze.user;
+        startDate = userFreeze.startDate;
+        freezeDays = userFreeze.freezeDays;
+        freezeAmount = userFreeze.freezeAmount;
+    }
 
 
     function freeze(address _to, uint256 _start, uint256 _freezeDays, uint256 _amount) internal {
@@ -179,41 +191,6 @@ abstract contract ERC20FreezableCapped is ERC20, HexMoneyInternal {
             }
         }
     }
-
-    function getUserFreezings(address _user) public view returns (bytes32[] memory userFreezings) {
-        return freezingsByUser[_user];
-    }
-
-    function getFreezingById(bytes32 freezingId) public view returns (address user, uint256 startDate, uint256 freezeDays, uint256 freezeAmount) {
-        Freezing memory userFreeze = freezings[freezingId];
-        user = userFreeze.user;
-        startDate = userFreeze.startDate;
-        freezeDays = userFreeze.freezeDays;
-        freezeAmount = userFreeze.freezeAmount;
-    }
-
-//    function getUserFreezings(address _user) public view returns (uint256[] memory freezingDates) {
-//        QueueLib.Queue memory userFreezingQueue = freezingsByUser[_user];
-//
-//        uint256 i;
-//        bytes32 freezingPack;
-//
-//        do {
-//            bytes32 freezeId;
-//            if (freezingPack == 0x000) {
-//                  freezeId = userFreezingQueue.first;
-//            } else {
-//                 freezeId = userFreezingQueue.nextElement[freezingPack];
-//            }
-//
-//            Freezing memory userFreeze = freezings[freezeId];
-//            freezingDates[i] = userFreeze.startDate;
-//
-//            freezingPack = freezeId;
-//            i++;
-//        } while (freezingPack != userFreezingQueue.last);
-//
-//    }
 
     function _daysToTimestampFrom(uint256 from, uint256 lockDays) internal pure returns(uint256) {
         return SafeMath.add(from, SafeMath.mul(lockDays, SECONDS_IN_DAY));
