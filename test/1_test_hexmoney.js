@@ -41,7 +41,7 @@ contract('hxy', accounts => {
 
     const eth = web3.utils.toWei('1', 'ether');
     //const day = 86400;
-    const day = 120;
+    const day = 86400;
 
     let now;
     let snapshotId;
