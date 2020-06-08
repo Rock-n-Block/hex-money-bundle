@@ -59,4 +59,9 @@ abstract contract HexMoneyExchangeBase is HexMoneyInternal {
 
     function _addToDividends(uint256 _amount) internal virtual {
     }
+
+    function _validateAmount(uint256 _amount) internal {
+        require(_amount >= minAmount, "amount is too low");
+        require(_amount <= maxAmount, "amount is too high");
+    }
 }

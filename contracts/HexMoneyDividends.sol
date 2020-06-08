@@ -66,12 +66,32 @@ contract HexMoneyDividends is HexMoneyTeam, HexMoneyInternal {
         teamAddress = _teamAddress;
         secondTeamAddress = _secondTeamAddress;
 
-        //setDeployInitialRecordTime();
+        setDeployInitialRecordTime();
     }
 
-    function getClaimedDividends(address _addr) public view returns (uint256[4] memory) {
-        DividendsUserClaimed memory divs = userClaimedDividends[_addr];
-        return [divs.hexAmount, divs.hxyAmount, divs.ethAmount, divs.lastClaim];
+    function getTodayDividends(address _addr) public view returns(uint256[3] memory) {
+        uint256 userFrozenBalance = HXY(hxyToken).freezingBalanceOf(_addr);
+        uint256 hexAmount;
+        uint256 hxyAmount;
+        uint256 ethAmount;
+
+        if (userFrozenBalance != 0) {
+            uint256 totalFrozen = HXY(hxyToken).getTotalFrozen();
+
+            uint256 userFrozenPercentage = SafeMath.div(userFrozenBalance, totalFrozen);
+            hexAmount = _getClaimAmount(dividends.hexDividends.currentDayTokens, userFrozenPercentage);
+            hxyAmount = _getClaimAmount(dividends.hxyDividends.currentDayTokens, userFrozenPercentage);
+            ethAmount = _getClaimAmount(dividends.ethDividends.currentDayTokens, userFrozenPercentage);
+        }
+        return [hexAmount, hxyAmount, ethAmount];
+    }
+
+    function getTodayDividendsTotal() public view returns (uint256[3] memory) {
+        return [
+            dividends.hexDividends.currentDayTokens,
+            dividends.hxyDividends.currentDayTokens,
+            dividends.ethDividends.currentDayTokens
+        ];
     }
 
     function getAvailableDividends(address _addr) public view returns(uint256[3] memory) {
@@ -91,8 +111,55 @@ contract HexMoneyDividends is HexMoneyTeam, HexMoneyInternal {
         return [hexAmount, hxyAmount, ethAmount];
     }
 
+    function getAvailableDividendsTotal() public view returns(uint256[3] memory) {
+        return [
+            dividends.hexDividends.previousDayTokens,
+            dividends.hxyDividends.previousDayTokens,
+            dividends.ethDividends.previousDayTokens
+        ];
+
+    }
+
+    function getClaimedDividends(address _addr) public view returns (uint256[4] memory) {
+        DividendsUserClaimed memory divs = userClaimedDividends[_addr];
+        return [divs.hexAmount, divs.hxyAmount, divs.ethAmount, divs.lastClaim];
+    }
+
+
+    function getClaimedDividendsYesterday() public view returns (uint256[3] memory) {
+        return [
+            dividends.hexDividends.claimedTodayTokens,
+            dividends.hxyDividends.claimedTodayTokens,
+            dividends.ethDividends.claimedTodayTokens
+        ];
+    }
+
+    function getClaimedDividendsTotal() public view returns (uint256[3] memory) {
+        return [
+            totalClaimedDividends.hexAmount,
+            totalClaimedDividends.hxyAmount,
+            totalClaimedDividends.ethAmount
+        ];
+    }
+
     function getRecordTime() public view returns (uint256) {
         return dividends.recordTime;
+    }
+
+    function getBlock() public view returns (uint256) {
+        return block.timestamp;
+    }
+
+    function getRemainingRecordTime() public view returns (uint256) {
+        if (block.timestamp < dividends.recordTime) {
+            return SafeMath.sub(dividends.recordTime, block.timestamp);
+        } else {
+            uint256 daysPassed = SafeMath.div(SafeMath.sub(block.timestamp, dividends.recordTime), SECONDS_IN_DAY);
+            daysPassed = (daysPassed < 1) ? 1 : daysPassed;
+
+            uint256 adjustedRecordTime = SafeMath.add(dividends.recordTime, SafeMath.mul(daysPassed, SECONDS_IN_DAY));
+            return SafeMath.sub(adjustedRecordTime, block.timestamp);
+        }
     }
 
     function getDividendsPercentage() public view returns (uint256) {
@@ -273,6 +340,8 @@ contract HexMoneyDividends is HexMoneyTeam, HexMoneyInternal {
                  currencyDividends.currentDayTokens = 0;
                  haveUnclaimed = false;
             }
+
+            currencyDividends.claimedTodayTokens = 0;
 
         }
     }

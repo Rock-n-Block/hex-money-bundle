@@ -13,8 +13,8 @@ contract HexMoneyExchangeETH is HexMoneyExchangeBase {
     HexMoneyExchangeBase(_hxyToken, _dividendsContract)
     public {
         decimals = 10 ** 18;
-        minAmount = 10 ** 10;
-        maxAmount = SafeMath.mul(10 ** 9, decimals);
+        minAmount = 10 ** 14;
+        maxAmount = SafeMath.mul(10 ** 5, decimals);
     }
 
     function getUniswapGetterInstance() public view returns (address) {
@@ -32,6 +32,7 @@ contract HexMoneyExchangeETH is HexMoneyExchangeBase {
         // Assets Transfers
     receive() external payable {
         require(msg.value > 0, "cannot be zero payment");
+        _validateAmount(msg.value);
         uint256 hexAmount = IUniswapExchangeAmountGetters(uniswapGetterInstance).getEthToTokenInputPrice(msg.value);
 
         HXY(hxyToken).mintFromDapp(_msgSender(), hexAmount);

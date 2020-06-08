@@ -23,6 +23,7 @@ contract HexMoneyExchangeHEX is HexMoneyExchangeBase {
 
     function exchangeHex(uint256 amount) public {
         require(IERC20(hexToken).transferFrom(_msgSender(), address(this), amount), "exchange amount greater than approved");
+        _validateAmount(amount);
 
         HXY(hxyToken).mintFromDapp(_msgSender(), amount);
         _addToDividends(amount);
