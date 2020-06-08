@@ -169,7 +169,7 @@ abstract contract ERC20FreezableCapped is ERC20, HexMoneyInternal {
 
     function refreeze(uint256 _startTime, uint256 addAmount) internal {
         bytes32 freezeId = _toFreezeKey(_msgSender(), _startTime);
-        Freezing memory userFreeze = freezings[freezeId];
+        Freezing storage userFreeze = freezings[freezeId];
 
         if (!userFreeze.firstTimeLockPassed) {
             uint256 lockUntil = _daysToTimestampFrom(userFreeze.startDate, userFreeze.freezeDays);

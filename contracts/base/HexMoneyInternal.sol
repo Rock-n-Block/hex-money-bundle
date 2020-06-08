@@ -10,7 +10,7 @@ contract HexMoneyInternal is AccessControl, ReentrancyGuard  {
     uint256 public constant SECONDS_IN_DAY = 86400;
 
     // dev-test
-    // uint256 public constant SECONDS_IN_DAY = 120;
+    // uint256 public constant SECONDS_IN_DAY = 300;
 
     HexWhitelist internal whitelist;
 

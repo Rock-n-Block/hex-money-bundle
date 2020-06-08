@@ -41,7 +41,7 @@ contract('hxy', accounts => {
 
     const eth = web3.utils.toWei('1', 'ether');
     //const day = 86400;
-    const day = 86400;
+    const day = 300;
 
     let now;
     let snapshotId;
@@ -139,7 +139,6 @@ contract('exchange', accounts => {
             });
         });
     });
-
 
     it('#1 construct', async () => {
         hexExchangeHEX.address.should.have.length(42);
@@ -556,8 +555,6 @@ contract('exchange', accounts => {
         const freezing = await hxyToken.getFreezingById(freezeId);
         const freezeStart = freezing.startDate;
 
-        //console.log(freezing);
-
         const frezeBalanceAfter = await hxyToken.freezingBalanceOf(BUYER_1);
         await hxyToken.refreezeHxy(freezeStart, {from: BUYER_1}).should.not.be.rejected;
 
@@ -565,7 +562,6 @@ contract('exchange', accounts => {
         refreezeBalance.should.be.bignumber.above(frezeBalanceAfter)
 
         const freezingAfter = await hxyToken.getFreezingById(freezeId);
-        //console.log(freezingAfter);
     })
 
 
