@@ -7,10 +7,10 @@ import "../whitelist/HexWhitelist.sol";
 
 contract HexMoneyInternal is AccessControl, ReentrancyGuard  {
     // production
-    //uint256 public constant SECONDS_IN_DAY = 86400;
+    uint256 public constant SECONDS_IN_DAY = 86400;
 
     // dev-test
-    uint256 public constant SECONDS_IN_DAY = 120;
+    // uint256 public constant SECONDS_IN_DAY = 120;
 
     HexWhitelist internal whitelist;
 
