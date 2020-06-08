@@ -88,7 +88,7 @@ contract('exchange', accounts => {
 
     const eth = web3.utils.toWei('1', 'ether');
     //const day = 86400;
-    const day = 120;
+    const day = 86400;
 
     let now;
     let snapshotId;
@@ -556,12 +556,16 @@ contract('exchange', accounts => {
         const freezing = await hxyToken.getFreezingById(freezeId);
         const freezeStart = freezing.startDate;
 
+        //console.log(freezing);
+
         const frezeBalanceAfter = await hxyToken.freezingBalanceOf(BUYER_1);
         await hxyToken.refreezeHxy(freezeStart, {from: BUYER_1}).should.not.be.rejected;
 
         const refreezeBalance = await hxyToken.freezingBalanceOf(BUYER_1);
         refreezeBalance.should.be.bignumber.above(frezeBalanceAfter)
 
+        const freezingAfter = await hxyToken.getFreezingById(freezeId);
+        //console.log(freezingAfter);
     })
 
 
