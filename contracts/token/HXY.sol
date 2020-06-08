@@ -139,8 +139,7 @@ contract HXY is ERC20FreezableCapped, HexMoneyTeam {
             mint(account, amount);
         } else {
             uint256 lockPeriod = whitelist.getDappLockPeriod(dappAddress);
-            uint256 freezeUntil = _daysToTimestamp(lockPeriod);
-            mintAndFreezeTo(account, amount, freezeUntil);
+            mintAndFreezeTo(account, amount, lockPeriod);
         }
     }
 
@@ -152,8 +151,7 @@ contract HXY is ERC20FreezableCapped, HexMoneyTeam {
             mint(account, amount);
         } else {
             uint256 lockPeriod = whitelist.getReferralLockPeriod(referralAddress);
-            uint256 freezeUntil = _daysToTimestamp(lockPeriod);
-            mintAndFreezeTo(account, amount, freezeUntil);
+            mintAndFreezeTo(account, amount, lockPeriod);
         }
     }
 
