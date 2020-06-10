@@ -181,6 +181,7 @@ contract HexMoneyDividends is HexMoneyInternal {
     }
 
 
+
     function claimDividends() public {
         updateAndSendDividends();
 
