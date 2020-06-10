@@ -17,17 +17,15 @@ abstract contract ERC20FreezableCapped is ERC20, HexMoneyInternal {
     mapping (address => uint) internal freezingBalance;
 
     mapping(address => bytes32[]) internal freezingsByUser;
-    //QueueLib.Queue public userFreezeQueue;
-    //mapping(address => QueueLib.Queue) internal freezingsByUser;
 
+    mapping (address => uint256) internal latestFreezingTime;
 
     struct Freezing {
         address user;
         uint256 startDate;
         uint256 freezeDays;
-        uint256 baseFreezeDays;
         uint256 freezeAmount;
-        bool firstTimeLockPassed;
+        bool capitalized;
     }
 
 
@@ -68,6 +66,9 @@ abstract contract ERC20FreezableCapped is ERC20, HexMoneyInternal {
         return freezingBalance[account];
     }
 
+    function latestFreezeTimeOf(address account) public view returns (uint256) {
+        return latestFreezingTime[account];
+    }
 
     /**
      * @dev Returns the cap on the token's total supply.
@@ -99,9 +100,8 @@ abstract contract ERC20FreezableCapped is ERC20, HexMoneyInternal {
             user: _to,
             startDate: _start,
             freezeDays: _freezeDays,
-            baseFreezeDays: _freezeDays,
             freezeAmount: _amount,
-            firstTimeLockPassed: false
+            capitalized: false
         });
 
         bytes32 freezeId = _toFreezeKey(_to, _start);
@@ -111,7 +111,7 @@ abstract contract ERC20FreezableCapped is ERC20, HexMoneyInternal {
 
         freezings[freezeId] = userFreeze;
         freezingsByUser[_to].push(freezeId);
-        //QueueLib.push(freezingsByUser[_to], freezeId);
+        latestFreezingTime[_to] = _start;
 
         emit Transfer(_msgSender(), _to, _amount);
         emit Freezed(_to, _start, _amount);
@@ -126,9 +126,8 @@ abstract contract ERC20FreezableCapped is ERC20, HexMoneyInternal {
             user: _to,
             startDate: _start,
             freezeDays: _freezeDays,
-            baseFreezeDays: _freezeDays,
             freezeAmount: _amount,
-            firstTimeLockPassed: false
+            capitalized: false
         });
 
         bytes32 freezeId = _toFreezeKey(_to, _start);
@@ -136,8 +135,8 @@ abstract contract ERC20FreezableCapped is ERC20, HexMoneyInternal {
         freezingBalance[_to] = freezingBalance[_to].add(_amount);
 
         freezings[freezeId] = userFreeze;
-        //QueueLib.push(freezingsByUser[_to], freezeId);
         freezingsByUser[_to].push(freezeId);
+        latestFreezingTime[_to] = _start;
 
         _totalSupply = _totalSupply.add(_amount);
 
@@ -154,7 +153,7 @@ abstract contract ERC20FreezableCapped is ERC20, HexMoneyInternal {
         Freezing memory userFreeze = freezings[freezeId];
 
         uint256 lockUntil = _daysToTimestampFrom(userFreeze.startDate, userFreeze.freezeDays);
-        require(block.timestamp >= lockUntil);
+        require(block.timestamp >= lockUntil, "cannot release before lock");
 
         uint256 amount = userFreeze.freezeAmount;
 
@@ -162,7 +161,6 @@ abstract contract ERC20FreezableCapped is ERC20, HexMoneyInternal {
         freezingBalance[_msgSender()] = freezingBalance[_msgSender()].sub(amount);
 
         _deleteFreezing(freezeId, freezingsByUser[_msgSender()]);
-        //QueueLib.drop(freezingsByUser[_msgSender()], freezeId);
 
         emit Released(_msgSender(), amount);
     }
@@ -171,17 +169,38 @@ abstract contract ERC20FreezableCapped is ERC20, HexMoneyInternal {
         bytes32 freezeId = _toFreezeKey(_msgSender(), _startTime);
         Freezing storage userFreeze = freezings[freezeId];
 
-        if (!userFreeze.firstTimeLockPassed) {
-            uint256 lockUntil = _daysToTimestampFrom(userFreeze.startDate, userFreeze.freezeDays);
-            require(block.timestamp >= lockUntil, "cannot refreeze in first lock period");
-
-            userFreeze.firstTimeLockPassed = true;
+        uint256 lockUntil;
+        if (!userFreeze.capitalized) {
+            lockUntil = _daysToTimestampFrom(userFreeze.startDate, userFreeze.freezeDays);
+        } else {
+            lockUntil = _daysToTimestampFrom(userFreeze.startDate, 1);
         }
 
-        userFreeze.freezeDays = SafeMath.add(userFreeze.freezeDays, userFreeze.baseFreezeDays);
-        userFreeze.freezeAmount = SafeMath.add(userFreeze.freezeAmount, addAmount);
+        require(block.timestamp >= lockUntil, "cannot refreeze before lock");
+
+        bytes32 newFreezeId = _toFreezeKey(userFreeze.user, block.timestamp);
+        uint256 oldFreezeAmount = userFreeze.freezeAmount;
+        uint256 newFreezeAmount = SafeMath.add(userFreeze.freezeAmount, addAmount);
+
+        Freezing memory newFreeze = Freezing({
+            user: userFreeze.user,
+            startDate: block.timestamp,
+            freezeDays: userFreeze.freezeDays,
+            freezeAmount: newFreezeAmount,
+            capitalized: true
+        });
 
         freezingBalance[_msgSender()] = freezingBalance[_msgSender()].add(addAmount);
+
+        freezings[newFreezeId] = newFreeze;
+        freezingsByUser[userFreeze.user].push(newFreezeId);
+        latestFreezingTime[userFreeze.user] = block.timestamp;
+
+        _deleteFreezing(freezeId, freezingsByUser[_msgSender()]);
+
+        emit Released(_msgSender(), oldFreezeAmount);
+        emit Transfer(_msgSender(), _msgSender(), addAmount);
+        emit Freezed(_msgSender(), block.timestamp, newFreezeAmount);
     }
 
     function _deleteFreezing(bytes32 freezingId, bytes32[] storage userFreezings) internal {

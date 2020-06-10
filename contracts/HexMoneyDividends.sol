@@ -8,8 +8,6 @@ import "./base/HexMoneyInternal.sol";
 import "./token/HXY.sol";
 
 contract HexMoneyDividends is HexMoneyInternal {
-    uint256 deployedAt;
-
     HXY internal hxyToken;
     IERC20 internal hexToken;
     IERC20 internal usdcToken;
@@ -40,6 +38,7 @@ contract HexMoneyDividends is HexMoneyInternal {
 
     uint256 internal totalFrozenHxyToday;
     uint256 internal dividendsRecordTime;
+    uint256 internal deployedAt;
 
 
     mapping(address => uint256) internal userClaimedLastTime;
@@ -186,7 +185,9 @@ contract HexMoneyDividends is HexMoneyInternal {
         updateAndSendDividends();
 
         uint256 userFrozenBalance = HXY(hxyToken).freezingBalanceOf(_msgSender());
+        uint256 userLastFreeze = HXY(hxyToken).latestFreezeTimeOf(_msgSender());
         require(userFrozenBalance != 0, "must be freezed amount of HXY to claim dividends");
+        require(userLastFreeze < SafeMath.sub(dividendsRecordTime, (SafeMath.mul(1, SECONDS_IN_DAY))), "cannot claim if freezed today");
         require(userClaimedLastTime[_msgSender()] < dividendsRecordTime, "tokens already claimed today");
 
         processClaimHex(userFrozenBalance);

@@ -98,8 +98,6 @@ contract('exchange', accounts => {
     });
     */
 
-
-
     it('#0 balances', () => {
         accounts.forEach((account, index) => {
             web3.eth.getBalance(account, function (_, balance) {
@@ -329,7 +327,6 @@ contract('exchange', accounts => {
 
         const hexBalanceAfterOne = await hexToken.balanceOf(BUYER_1);
         const hexBalanceAfterTwo = await hexToken.balanceOf(BUYER_1);
-        console.log(hexBalanceAfterTwo.toString());
         const hexBalanceTeamFirst = await hexToken.balanceOf(HXY_DIVIDENDS_TEAM_FIRST);
         const hexBalanceTeamSecond = await hexToken.balanceOf(HXY_DIVIDENDS_TEAM_SECOND);
 
@@ -509,6 +506,8 @@ contract('exchange', accounts => {
         const freezing = await hxyToken.getFreezingById(freezeId);
         const freezeStart = freezing.startDate;
 
+        const totalMintedBefore = await hxyToken.getTotalHxyMinted();
+
         await hxyToken.releaseFrozen(freezeStart, {from: BUYER_1}).should.not.be.rejected;
 
         const unfreezeBalance = await hxyToken.freezingBalanceOf(BUYER_1);
@@ -516,7 +515,12 @@ contract('exchange', accounts => {
         const hxyBalanceAfter = await hxyToken.balanceOf(BUYER_1);
         hxyBalanceAfter.should.be.bignumber.above(hxyBalance);
 
+        const totalMintedAfter = await hxyToken.getTotalHxyMinted();
+        totalMintedAfter.should.be.bignumber.equals(totalMintedBefore);
+
     })
+
+
 
     it('#14 check refreeze', async () => {
         const rate = await hxyToken.getCurrentHxyRate();
@@ -542,6 +546,9 @@ contract('exchange', accounts => {
         const freezeBalanceAfter = await hxyToken.freezingBalanceOf(BUYER_1)
         freezeBalanceAfter.should.be.bignumber.equals(hxyBalance);
 
+        const latestFreezing = await hxyToken.latestFreezeTimeOf(BUYER_1);
+        latestFreezing.should.be.bignumber.equals(new BN(await getBlockchainTimestamp()));
+
         await timeTo(freezeTime +1);
 
         const userFreezings = await hxyToken.getUserFreezings(BUYER_1);
@@ -549,13 +556,25 @@ contract('exchange', accounts => {
         const freezing = await hxyToken.getFreezingById(freezeId);
         const freezeStart = freezing.startDate;
 
-        const frezeBalanceAfter = await hxyToken.freezingBalanceOf(BUYER_1);
+        const freezeBalanceSecond = await hxyToken.freezingBalanceOf(BUYER_1);
+
         await hxyToken.refreezeHxy(freezeStart, {from: BUYER_1}).should.not.be.rejected;
-
         const refreezeBalance = await hxyToken.freezingBalanceOf(BUYER_1);
-        refreezeBalance.should.be.bignumber.above(frezeBalanceAfter)
+        refreezeBalance.should.be.bignumber.above(freezeBalanceSecond)
 
-        //const freezingAfter = await hxyToken.getFreezingById(freezeId);
+        const userFreezingsAfter = await hxyToken.getUserFreezings(BUYER_1);
+        const newFreezeId = userFreezingsAfter[1];
+
+
+        newFreezeId.should.not.be.equals(freezeId);
+        const freezingAfter = await hxyToken.getFreezingById(newFreezeId);
+        const freezeStartAfter = freezingAfter.startDate;
+
+        freezeStartAfter.should.be.bignumber.above(freezeStart);
+        const latestFreezingAfter = await hxyToken.latestFreezeTimeOf(BUYER_1);
+        latestFreezingAfter.should.be.bignumber.equals(new BN(await getBlockchainTimestamp()));
+        latestFreezingAfter.should.be.bignumber.above(latestFreezing);
+
     })
 
 });
