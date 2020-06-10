@@ -274,7 +274,7 @@ contract('exchange', accounts => {
         await increaseTime(day + 10);
 
         const tokensReceived = await hexDividends.getTodayDividendsTotal();
-        tokensReceived[0].should.be.bignumber.equals(hexAmount);
+        tokensReceived[2].should.be.bignumber.equals(hexAmount);
         const recordTime = await hexDividends.getRecordTime();
         recordTime.should.be.bignumber.below(new BN(await getBlockchainTimestamp()));
 
@@ -296,6 +296,9 @@ contract('exchange', accounts => {
 
     it('#8 check dividends with two claims', async () => {
         const hexAmount = await hexExchangeHEX.getMaxAmount();
+        const expectedTotalHex = hexAmount.mul(new BN(2));
+        const expectedBalanceUsers = expectedTotalHex.mul(new BN(90)).div(new BN(100)).div(new BN(2));
+        const expectedBalanceTeams = expectedTotalHex.div(new BN(10)).div(new BN(2));
 
         await hexToken.mint(BUYER_1, hexAmount.toString());
         await hexToken.mint(BUYER_2, hexAmount.toString());
@@ -314,20 +317,21 @@ contract('exchange', accounts => {
         await increaseTime(day + 10);
 
         const tokensReceived = await hexDividends.getTodayDividendsTotal();
-        tokensReceived[0].should.be.bignumber.equals(hexAmount.mul(new BN(2)));
+        tokensReceived[2].should.be.bignumber.equals(hexAmount.mul(new BN(2)));
 
         await hexDividends.claimDividends({from: BUYER_1}).should.not.be.rejected;
         await increaseTime(20);
+
+        const availableDivs = await hexDividends.getAvailableDividends(BUYER_2)
+        availableDivs[2].should.be.bignumber.equals(expectedBalanceUsers);
+
         await hexDividends.claimDividends({from: BUYER_2}).should.not.be.rejected;
 
         const hexBalanceAfterOne = await hexToken.balanceOf(BUYER_1);
         const hexBalanceAfterTwo = await hexToken.balanceOf(BUYER_1);
+        console.log(hexBalanceAfterTwo.toString());
         const hexBalanceTeamFirst = await hexToken.balanceOf(HXY_DIVIDENDS_TEAM_FIRST);
         const hexBalanceTeamSecond = await hexToken.balanceOf(HXY_DIVIDENDS_TEAM_SECOND);
-
-        const expectedTotalHex = hexAmount.mul(new BN(2));
-        const expectedBalanceUsers = expectedTotalHex.mul(new BN(90)).div(new BN(100)).div(new BN(2));
-        const expectedBalanceTeams = expectedTotalHex.div(new BN(10)).div(new BN(2));
 
         hexBalanceAfterOne.should.be.bignumber.equals(expectedBalanceUsers);
         hexBalanceAfterTwo.should.be.bignumber.equals(expectedBalanceUsers);
@@ -355,7 +359,7 @@ contract('exchange', accounts => {
         await increaseTime(day + 10);
 
         const tokensReceived = await hexDividends.getTodayDividendsTotal();
-        tokensReceived[0].should.be.bignumber.equals(hexAmount.mul(new BN(2)));
+        tokensReceived[2].should.be.bignumber.equals(hexAmount.mul(new BN(2)));
 
         await hexDividends.claimDividends({from: BUYER_1}).should.not.be.rejected;
 

@@ -79,50 +79,61 @@ contract HexMoneyDividends is HexMoneyInternal {
     }
 
 
-    function getTodayDividends(address account) public {
-
-    }
-
     function getTodayDividendsTotal() public view returns (uint256[4] memory) {
         return [
-            hexDividends.todayReceived,
-            hxyDividends.todayReceived,
             ethDividends.todayReceived,
+            hxyDividends.todayReceived,
+            hexDividends.todayReceived,
             usdcDividends.todayReceived
         ];
     }
 
-//    function getPreviousDividendsTotal() public view returns (uint256[3] memory) {
-//
-//    }
+    function getPreviousDividendsTotal() public view returns (uint256[4] memory) {
+        return [
+            ethDividends.prevDayTotal,
+            hxyDividends.prevDayTotal,
+            hexDividends.prevDayTotal,
+            usdcDividends.prevDayTotal
+        ];
 
-    function getAvailableDividends(address account) public {
+    }
 
+    function getAvailableDividends(address account) public view returns(uint256[4] memory) {
+        uint256 userFrozenBalance = HXY(hxyToken).freezingBalanceOf(account);
+
+        uint256 ethAmount;
+        uint256 hxyAmount;
+        uint256 hexAmount;
+        uint256 usdcAmount;
+
+        if (userFrozenBalance > 0) {
+            ethAmount = getClaimAmount(ethDividends.todayForClaim, userFrozenBalance);
+            hxyAmount = getClaimAmount(hxyDividends.todayForClaim, userFrozenBalance);
+            hexAmount = getClaimAmount(hexDividends.todayForClaim, userFrozenBalance);
+            usdcAmount = getClaimAmount(usdcDividends.todayForClaim, userFrozenBalance);
+        }
+        return [ethAmount, hxyAmount, hexAmount, usdcAmount];
+    }
+
+    function getUserLastClaim(address account) public view returns(uint256) {
+        return userClaimedLastTime[account];
     }
 
     function getAvailableDividendsTotal() public view returns (uint256[4] memory ) {
         return [
-            hexDividends.todayForClaim,
-            hxyDividends.todayForClaim,
             ethDividends.todayForClaim,
+            hxyDividends.todayForClaim,
+            hexDividends.todayForClaim,
             usdcDividends.todayForClaim
         ];
 
     }
 
-    function getClaimedDividends(address account) public {
-
-    }
-
-    function getClaimedDividendsYesterday() public {
-
-    }
-
     function getClaimedDividendsTotal() public view returns (uint256[4] memory ){
         return [
-            hexDividends.todayClaimed,
-            hxyDividends.todayClaimed,
             ethDividends.todayClaimed,
+            hxyDividends.todayClaimed,
+            hexDividends.todayClaimed,
             usdcDividends.todayClaimed
         ];
 
@@ -130,9 +141,6 @@ contract HexMoneyDividends is HexMoneyInternal {
 
     function getRecordTime() public view returns (uint256) {
         return dividendsRecordTime;
-
-    }
-    function getRemainingRecordTime() public view {
 
     }
 
@@ -224,10 +232,15 @@ contract HexMoneyDividends is HexMoneyInternal {
         currencyDividends.todayReceived = SafeMath.add(currencyDividends.todayReceived, amount);
     }
 
+    function getClaimAmount(uint256 todayForClaim, uint256 userFrozen) internal view returns (uint256){
+        return SafeMath.div(SafeMath.mul(todayForClaim, userFrozen), totalFrozenHxyToday);
+    }
+
     function processClaimEth(uint256 userFrozen) internal {
         if (ethDividends.todayForClaim > 0) {
 
-            uint256 amount = SafeMath.div(SafeMath.mul(ethDividends.todayForClaim, userFrozen), totalFrozenHxyToday);
+            //uint256 amount = SafeMath.div(SafeMath.mul(ethDividends.todayForClaim, userFrozen), totalFrozenHxyToday);
+            uint256 amount = getClaimAmount(ethDividends.todayForClaim, userFrozen);
             _msgSender().transfer(amount);
             ethDividends.todayClaimed = SafeMath.add(ethDividends.todayClaimed, amount);
         }
@@ -236,7 +249,8 @@ contract HexMoneyDividends is HexMoneyInternal {
     function _processClaimErc20(address erc20token, CurrencyDividends storage currencyDividends, uint256 userFrozen) internal {
         if (currencyDividends.todayForClaim > 0) {
 
-            uint256 amount = SafeMath.div(SafeMath.mul(currencyDividends.todayForClaim, userFrozen), totalFrozenHxyToday);
+            //uint256 amount = SafeMath.div(SafeMath.mul(currencyDividends.todayForClaim, userFrozen), totalFrozenHxyToday);
+            uint256 amount = getClaimAmount(currencyDividends.todayForClaim, userFrozen);
             require(IERC20(erc20token).transfer(_msgSender(), amount), "fail in transfer HEX dividends");
             currencyDividends.todayClaimed = SafeMath.add(currencyDividends.todayClaimed, amount);
         }
@@ -259,7 +273,7 @@ contract HexMoneyDividends is HexMoneyInternal {
         return block.timestamp > dividendsRecordTime ? true : false;
     }
 
-    function isInitialDeployTime() internal returns (bool) {
+    function isInitialDeployTime() internal view returns (bool) {
         return block.timestamp < SafeMath.add(deployedAt, SafeMath.mul(1, SECONDS_IN_DAY));
     }
 
@@ -270,7 +284,6 @@ contract HexMoneyDividends is HexMoneyInternal {
 
         // amount of tokens distributed for team one
         currencyDividends.todayForTeamOne = SafeMath.sub(currencyDividends.todayReceived, userTokensToClaim);
-
 
         // amount of tokens distributed for team two
         uint256 tokensToTeamTwo;
