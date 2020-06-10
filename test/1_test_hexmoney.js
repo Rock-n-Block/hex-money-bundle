@@ -16,8 +16,9 @@ const {
   // expectRevert, // Assertions for transactions that should fail
 } = require('@openzeppelin/test-helpers');
 
-const HEXToken = artifacts.require('./mocks/HEX.sol')
 const HXYToken = artifacts.require('./token/HXY.sol')
+const HEXToken = artifacts.require('./mocks/HEX.sol')
+const USDCToken = artifacts.require('./mocks/USDC.sol')
 const HEXWhitelist = artifacts.require("./whitelist/HexWhitelist.sol")
 const HEXDividends = artifacts.require('./HexMoneyDividends.sol');
 const HEXExchangeHEX = artifacts.require('./exchange/HexMoneyExchangeHEX.sol');
@@ -27,64 +28,20 @@ const UniswapV1 = artifacts.require('UniswapV1');
 const UniswapExchangeAmountGettersV1 = artifacts.require('UniswapExchangeAmountGettersV1',);
 
 
-contract('hxy', accounts => {
-    const OWNER = accounts[0];
-    const ACCOUNT_1 = accounts[1];
-    const BUYER_1 = accounts[2];
-    const BUYER_2 = accounts[3];
-    const HXY_TEAM_ADDRESS = accounts[5];
-    const HXY_LOCKED_ADDRESS = accounts[6];
-    const HXY_LIQUID_ADDRESS = accounts[7];
-    const HXY_MIGRATED_ADDRESS = accounts[8];
-    const HXY_DIVIDENDS_TEAM = accounts[9];
-    const HXY_DIVIDENDS_TEAM_TWO = accounts[10];
-
-    const eth = web3.utils.toWei('1', 'ether');
-    //const day = 86400;
-    const day = 300;
-
-    let now;
-    let snapshotId;
-
-    const getBlockchainTimestamp = async () => {
-        const latestBlock = await web3async(web3.eth, web3.eth.getBlock, 'latest');
-        return latestBlock.timestamp;
-    };
-
-    beforeEach(async () => {
-        snapshotId = (await snapshot()).result;
-        now = await getBlockchainTimestamp();
-
-    });
-
-    afterEach(async () => {
-        await revert(snapshotId);
-    });
-
-
-    it('#1 construct', async () => {
-        hxyToken = await HXYToken.new(HXY_TEAM_ADDRESS, HXY_LIQUID_ADDRESS, HXY_LOCKED_ADDRESS, HXY_MIGRATED_ADDRESS).should.not.be.rejected;
-
-        hxyTeamTokenAmount = (12 * 10 ** 14).toString();
-        hxyLockedAmount = (6 * 10 ** 14).toString();
-        (await hxyToken.balanceOf(HXY_TEAM_ADDRESS)).should.be.bignumber.equal(new BN(hxyTeamTokenAmount));
-        (await hxyToken.getLockedSupply()).should.be.bignumber.equal(new BN(hxyLockedAmount));
-    });
-})
-
-
-
 contract('exchange', accounts => {
     const OWNER = accounts[0];
     const ACCOUNT_1 = accounts[1];
     const BUYER_1 = accounts[2];
     const BUYER_2 = accounts[3];
+    const BUYER_3 = accounts[3];
     const HXY_TEAM_ADDRESS = accounts[5];
     const HXY_LOCKED_ADDRESS = accounts[6];
     const HXY_LIQUID_ADDRESS = accounts[7];
     const HXY_MIGRATED_ADDRESS = accounts[8];
-    const HXY_DIVIDENDS_TEAM = accounts[9];
-    const HXY_DIVIDENDS_TEAM_TWO = accounts[10];
+    const HXY_DIVIDENDS_TEAM_FIRST = accounts[9];
+    const HXY_DIVIDENDS_TEAM_SECOND = accounts[10];
+    const HXY_DIVIDENDS_TEAM_THIRD = accounts[11];
+    const HXY_DIVIDENDS_TEAM_FOURTH = accounts[12];
 
     const eth = web3.utils.toWei('1', 'ether');
     //const day = 86400;
@@ -102,14 +59,24 @@ contract('exchange', accounts => {
         snapshotId = (await snapshot()).result;
         now = await getBlockchainTimestamp();
 
-        hxyTeamTokenAmount = (12 * 10 ** 14).toString();
+        hxyTeamTokenAmount = (new BN(12)).mul((new BN(10)).pow(new BN(14)));
+        usdcTeamTokenAmount = (new BN(12)).mul((new BN(10)).pow(new BN(24)));
         hxyTeamTimeLock = (365).toString();
-        hexToken = await HEXToken.new(OWNER, hxyTeamTokenAmount);
         hxyToken = await HXYToken.new(HXY_TEAM_ADDRESS, HXY_LIQUID_ADDRESS, HXY_LOCKED_ADDRESS, HXY_MIGRATED_ADDRESS);
+        hexToken = await HEXToken.new(OWNER, hxyTeamTokenAmount);
+        usdcToken = await USDCToken.new(OWNER, usdcTeamTokenAmount);
         hexWhitelist = await HEXWhitelist.new({from: OWNER});
         (await hxyToken.balanceOf(HXY_TEAM_ADDRESS)).should.be.bignumber.equal(new BN(hxyTeamTokenAmount));
         //(await hxyToken.getLockedSupply()).should.be.bignumber.equal(new BN(hxyLockedAmount));
-        hexDividends = await HEXDividends.new(hexToken.address, hxyToken.address, HXY_DIVIDENDS_TEAM, HXY_DIVIDENDS_TEAM_TWO);
+        hexDividends = await HEXDividends.new(
+            hxyToken.address,
+            hexToken.address,
+            usdcToken.address,
+            HXY_DIVIDENDS_TEAM_FIRST,
+            HXY_DIVIDENDS_TEAM_SECOND,
+            HXY_DIVIDENDS_TEAM_THIRD,
+            HXY_DIVIDENDS_TEAM_FOURTH
+            );
         hexExchangeHEX = await HEXExchangeHEX.new(hexToken.address, hxyToken.address, hexDividends.address);
         await hxyToken.setWhitelistAddress(hexWhitelist.address).should.not.be.rejected;
         await hexWhitelist.registerDappTradeable(hexExchangeHEX.address, eth.toString(), {from: OWNER}).should.not.be.rejected;
@@ -171,7 +138,7 @@ contract('exchange', accounts => {
         (await hxyToken.balanceOf(BUYER_1)).should.be.bignumber.equals(hxyAmount);
     })
 
-    it('#3 check basic exchange for ETH', async () => {
+    it('#4 check basic exchange for ETH', async () => {
         hexExchangeETH = await HEXExchangeETH.new(hxyToken.address, hexDividends.address);
         (await hxyToken.getWhitelistAddress()).should.be.equals(hexWhitelist.address);
         await hexWhitelist.registerDappTradeable(hexExchangeETH.address, eth.toString(), {from: OWNER}).should.not.be.rejected;
@@ -204,7 +171,7 @@ contract('exchange', accounts => {
 
     })
 
-    it('#4 check rate round switching', async () => {
+    it('#5 check rate round switching', async () => {
         const expectedFirstRoundRate = new BN(2 * 10 ** 3);
         const expectedSecondRoundRate = new BN(3 * 10 ** 3);
         const firstRoundRate = await hxyToken.getCurrentHxyRate();
@@ -252,7 +219,7 @@ contract('exchange', accounts => {
         hxyBalanceAfter.should.be.bignumber.equals(secondHxyAmount);
     })
 
-    it('#5 check rate adjusted if more than remained in round', async () => {
+    it('#6 check rate adjusted if more than remained in round', async () => {
         const firstRoundRate = await hxyToken.getCurrentHxyRate();
         const expectedFirstRoundRate = new BN(2 * 10 ** 3);
         const expectedSecondRoundRate = new BN(3 * 10 ** 3);
@@ -290,129 +257,153 @@ contract('exchange', accounts => {
         expectedTotal.should.be.bignumber.equals(hxyAmountAfter);
     })
 
-    it('#6 check dividends if freezed', async () => {
-        const rate = await hxyToken.getCurrentHxyRate();
-        const hexAmount = (await hxyToken.getRemainingHxyInRound()).mul(rate);
-        const maxAmount = await hexExchangeHEX.getMaxAmount();
-        const sendTransactions = hexAmount.div(maxAmount).toNumber();
+    it('#7 check dividends if freezed', async () => {
+        const hexAmount = await hexExchangeHEX.getMaxAmount();
 
         await hexToken.mint(BUYER_1, hexAmount.toString());
         await hexToken.approve(hexExchangeHEX.address, hexAmount.toString(), {from: BUYER_1});
 
-
-        for (let i = 0; i < sendTransactions; i++) {
-            await hexExchangeHEX.exchangeHex(maxAmount.toString(), {from: BUYER_1}).should.not.be.rejected;
-        }
+        await hexExchangeHEX.exchangeHex(hexAmount.toString(), {from: BUYER_1}).should.not.be.rejected;
 
         const hxyBalance = await hxyToken.balanceOf(BUYER_1);
-        const freezeTime = (await getBlockchainTimestamp()) + (10 * day);
 
         await hxyToken.freezeHxy(hxyBalance.toString(), {from: BUYER_1}).should.not.be.rejected;
 
         await increaseTime(day + 10);
-        const hexBalanceBefore = await hexToken.balanceOf(BUYER_1);
-        await hexDividends.claimDividends({from: BUYER_1}).should.not.be.rejected;
 
-        const hexBalanceAfter = await hexToken.balanceOf(BUYER_1);
-        //const dividendsPercent = await hexDividends.getDividendsPercentage();
-        hexBalanceAfter.should.be.bignumber.above(hexBalanceBefore);
-    })
-
-    it('#6 check dividends distributed for team', async () => {
-        const rate = await hxyToken.getCurrentHxyRate();
-        const hexAmount = (await hxyToken.getRemainingHxyInRound()).mul(rate);
-        const maxAmount = await hexExchangeHEX.getMaxAmount();
-        const sendTransactions = hexAmount.div(maxAmount).toNumber();
-
-        await hexToken.mint(BUYER_1, hexAmount.toString());
-        await hexToken.approve(hexExchangeHEX.address, hexAmount.toString(), {from: BUYER_1});
-
-        for (let i = 0; i < sendTransactions; i++) {
-            await hexExchangeHEX.exchangeHex(maxAmount.toString(), {from: BUYER_1}).should.not.be.rejected;
-        }
-
-        const hxyBalance = await hxyToken.balanceOf(BUYER_1);
-        const freezeTime = (await getBlockchainTimestamp()) + (10 * day);
-
-        await hxyToken.freezeHxy(hxyBalance.toString(), {from: BUYER_1}).should.not.be.rejected;
-
+        const tokensReceived = await hexDividends.getTodayDividendsTotal();
+        tokensReceived[2].should.be.bignumber.equals(hexAmount);
         const recordTime = await hexDividends.getRecordTime();
-        await increaseTime(day + 10);
-        const hexBalanceBefore = await hexToken.balanceOf(BUYER_1);
+        recordTime.should.be.bignumber.below(new BN(await getBlockchainTimestamp()));
+
+
         await hexDividends.claimDividends({from: BUYER_1}).should.not.be.rejected;
 
         const hexBalanceAfter = await hexToken.balanceOf(BUYER_1);
-        hexBalanceAfter.should.be.bignumber.above(hexBalanceBefore);
+        hexBalanceAfter.should.be.bignumber.equals(hexAmount.mul(new BN(90)).div(new BN(100)));
+
+        const teamAmount = hexAmount.div(new BN(10));
+        const hexBalanceTeamFirst = await hexToken.balanceOf(HXY_DIVIDENDS_TEAM_FIRST);
+        const hexBalanceTeamSecond = await hexToken.balanceOf(HXY_DIVIDENDS_TEAM_SECOND);
+
+        hexBalanceTeamFirst.should.be.bignumber.equals(teamAmount.div(new BN(2)));
+        hexBalanceTeamSecond.should.be.bignumber.equals(teamAmount.div(new BN(2)));
 
 
-        const hexBalanceTeamBefore = await hexToken.balanceOf(HXY_DIVIDENDS_TEAM);
-        const hexBalanceTeamTwoBefore = await hexToken.balanceOf(HXY_DIVIDENDS_TEAM_TWO);
-
-        await increaseTime(day + 10);
-        await hexDividends.manualCheckUpdateDividends().should.not.be.rejected;
-
-        const hexBalanceTeamAfter = await hexToken.balanceOf(HXY_DIVIDENDS_TEAM);
-        const hexBalanceTeamTwoAfter = await hexToken.balanceOf(HXY_DIVIDENDS_TEAM_TWO);
-
-        hexBalanceTeamAfter.should.be.bignumber.above(hexBalanceTeamBefore)
-        hexBalanceTeamTwoAfter.should.be.bignumber.above(hexBalanceTeamTwoBefore)
     })
 
-    it('#6 check remaining record time', async () => {
-        const rate = await hxyToken.getCurrentHxyRate();
-        const hexAmount = (await hxyToken.getRemainingHxyInRound()).mul(rate);
-        const maxAmount = await hexExchangeHEX.getMaxAmount();
-        const sendTransactions = hexAmount.div(maxAmount).toNumber();
+    it('#8 check dividends with two claims', async () => {
+        const hexAmount = await hexExchangeHEX.getMaxAmount();
+        const expectedTotalHex = hexAmount.mul(new BN(2));
+        const expectedBalanceUsers = expectedTotalHex.mul(new BN(90)).div(new BN(100)).div(new BN(2));
+        const expectedBalanceTeams = expectedTotalHex.div(new BN(10)).div(new BN(2));
 
         await hexToken.mint(BUYER_1, hexAmount.toString());
+        await hexToken.mint(BUYER_2, hexAmount.toString());
         await hexToken.approve(hexExchangeHEX.address, hexAmount.toString(), {from: BUYER_1});
+        await hexToken.approve(hexExchangeHEX.address, hexAmount.toString(), {from: BUYER_2});
 
-        for (let i = 0; i < sendTransactions; i++) {
-            await hexExchangeHEX.exchangeHex(maxAmount.toString(), {from: BUYER_1}).should.not.be.rejected;
-        }
+        await hexExchangeHEX.exchangeHex(hexAmount.toString(), {from: BUYER_1}).should.not.be.rejected;
+        await hexExchangeHEX.exchangeHex(hexAmount.toString(), {from: BUYER_2}).should.not.be.rejected;
 
-        const hxyBalance = await hxyToken.balanceOf(BUYER_1);
-        const freezeTime = (await getBlockchainTimestamp()) + (10 * day);
+        const hxyBalanceOne = await hxyToken.balanceOf(BUYER_1);
+        const hxyBalanceTwo = await hxyToken.balanceOf(BUYER_2);
 
-        await hxyToken.freezeHxy(hxyBalance.toString(), {from: BUYER_1}).should.not.be.rejected;
-
-        const blockNow = new BN(await getBlockchainTimestamp());
-        const recordTime = await hexDividends.getRecordTime();
-        const remainingRecordTime = await hexDividends.getRemainingRecordTime();
-
-        remainingRecordTime.should.be.bignumber.equals(recordTime.sub(blockNow))
+        await hxyToken.freezeHxy(hxyBalanceOne.toString(), {from: BUYER_1}).should.not.be.rejected;
+        await hxyToken.freezeHxy(hxyBalanceTwo.toString(), {from: BUYER_2}).should.not.be.rejected;
 
         await increaseTime(day + 10);
 
-        const recordTimeInPast = await hexDividends.getRecordTime();
-        const remainingRecordTimeAdjusted = await hexDividends.getRemainingRecordTime();
-        const blockNowAfter = new BN(await getBlockchainTimestamp());
-        const expectedRecordTime = recordTimeInPast.add(new BN(day));
+        const tokensReceived = await hexDividends.getTodayDividendsTotal();
+        tokensReceived[2].should.be.bignumber.equals(hexAmount.mul(new BN(2)));
 
-        recordTimeInPast.should.be.bignumber.equals(recordTime);
-        remainingRecordTimeAdjusted.should.be.bignumber.equals(expectedRecordTime.sub(blockNowAfter))
-
-        const hexBalanceBefore = await hexToken.balanceOf(BUYER_1);
         await hexDividends.claimDividends({from: BUYER_1}).should.not.be.rejected;
+        await increaseTime(20);
 
-        const hexBalanceAfter = await hexToken.balanceOf(BUYER_1);
-        hexBalanceAfter.should.be.bignumber.above(hexBalanceBefore);
+        const availableDivs = await hexDividends.getAvailableDividends(BUYER_2)
+        availableDivs[2].should.be.bignumber.equals(expectedBalanceUsers);
 
+        await hexDividends.claimDividends({from: BUYER_2}).should.not.be.rejected;
 
-        const hexBalanceTeamBefore = await hexToken.balanceOf(HXY_DIVIDENDS_TEAM);
-        const hexBalanceTeamTwoBefore = await hexToken.balanceOf(HXY_DIVIDENDS_TEAM_TWO);
+        const hexBalanceAfterOne = await hexToken.balanceOf(BUYER_1);
+        const hexBalanceAfterTwo = await hexToken.balanceOf(BUYER_1);
+        const hexBalanceTeamFirst = await hexToken.balanceOf(HXY_DIVIDENDS_TEAM_FIRST);
+        const hexBalanceTeamSecond = await hexToken.balanceOf(HXY_DIVIDENDS_TEAM_SECOND);
 
-        await increaseTime(day + 10);
-        await hexDividends.manualCheckUpdateDividends().should.not.be.rejected;
-
-        const hexBalanceTeamAfter = await hexToken.balanceOf(HXY_DIVIDENDS_TEAM);
-        const hexBalanceTeamTwoAfter = await hexToken.balanceOf(HXY_DIVIDENDS_TEAM_TWO);
-
-        hexBalanceTeamAfter.should.be.bignumber.above(hexBalanceTeamBefore)
-        hexBalanceTeamTwoAfter.should.be.bignumber.above(hexBalanceTeamTwoBefore)
+        hexBalanceAfterOne.should.be.bignumber.equals(expectedBalanceUsers);
+        hexBalanceAfterTwo.should.be.bignumber.equals(expectedBalanceUsers);
+        hexBalanceTeamFirst.should.be.bignumber.equals(expectedBalanceTeams);
+        hexBalanceTeamSecond.should.be.bignumber.equals(expectedBalanceTeams);
     })
 
-    it('#7 check dividends if not freezed', async () => {
+        it('#9 check dividends with one unclaim', async () => {
+        const hexAmount = await hexExchangeHEX.getMaxAmount();
+
+        await hexToken.mint(BUYER_1, hexAmount.toString());
+        await hexToken.mint(BUYER_2, hexAmount.toString());
+        await hexToken.approve(hexExchangeHEX.address, hexAmount.toString(), {from: BUYER_1});
+        await hexToken.approve(hexExchangeHEX.address, hexAmount.toString(), {from: BUYER_2});
+
+        await hexExchangeHEX.exchangeHex(hexAmount.toString(), {from: BUYER_1}).should.not.be.rejected;
+        await hexExchangeHEX.exchangeHex(hexAmount.toString(), {from: BUYER_2}).should.not.be.rejected;
+
+        const hxyBalanceOne = await hxyToken.balanceOf(BUYER_1);
+        const hxyBalanceTwo = await hxyToken.balanceOf(BUYER_2);
+
+        await hxyToken.freezeHxy(hxyBalanceOne.toString(), {from: BUYER_1}).should.not.be.rejected;
+        await hxyToken.freezeHxy(hxyBalanceTwo.toString(), {from: BUYER_2}).should.not.be.rejected;
+
+        await increaseTime(day + 10);
+
+        const tokensReceived = await hexDividends.getTodayDividendsTotal();
+        tokensReceived[2].should.be.bignumber.equals(hexAmount.mul(new BN(2)));
+
+        await hexDividends.claimDividends({from: BUYER_1}).should.not.be.rejected;
+
+        const recordTimeFirstDay = await hexDividends.getRecordTime();
+
+        const hexBalanceAfterOne = await hexToken.balanceOf(BUYER_1);
+        const hexBalanceTeamFirst = await hexToken.balanceOf(HXY_DIVIDENDS_TEAM_FIRST);
+        const hexBalanceTeamSecond = await hexToken.balanceOf(HXY_DIVIDENDS_TEAM_SECOND);
+
+        const expectedTotalHex = hexAmount.mul(new BN(2));
+        const expectedBalanceUser = expectedTotalHex.mul(new BN(90)).div(new BN(100)).div(new BN(2));
+        const expectedBalanceTeams = expectedTotalHex.div(new BN(10)).div(new BN(2));
+
+        hexBalanceAfterOne.should.be.bignumber.equals(expectedBalanceUser);
+        hexBalanceTeamFirst.should.be.bignumber.equals(expectedBalanceTeams);
+        hexBalanceTeamSecond.should.be.bignumber.equals(expectedBalanceTeams);
+
+        // tx for triggering contract and sending unclaimed to second team
+        const thirdBuyerAmount = hexAmount.mul(new BN(2));
+        await hexToken.mint(BUYER_3, thirdBuyerAmount.toString());
+        await hexToken.approve(hexExchangeHEX.address, thirdBuyerAmount.toString(), {from: BUYER_3});
+        await hexExchangeHEX.exchangeHex(hexAmount.toString(), {from: BUYER_3}).should.not.be.rejected;
+
+        await increaseTime(day + 10);
+
+        await hexExchangeHEX.exchangeHex(hexAmount.toString(), {from: BUYER_3}).should.not.be.rejected;
+
+        const recordTimeSecondDay = await hexDividends.getRecordTime();
+
+        recordTimeSecondDay.should.be.bignumber.equals(recordTimeFirstDay.add(new BN(day)));
+
+        const secondHexBalanceTeamFirst = await hexToken.balanceOf(HXY_DIVIDENDS_TEAM_FIRST);
+        const secondHexBalanceTeamSecond = await hexToken.balanceOf(HXY_DIVIDENDS_TEAM_SECOND);
+        const secondHexBalanceTeamThird = await hexToken.balanceOf(HXY_DIVIDENDS_TEAM_THIRD);
+        const secondHexBalanceTeamFourth = await hexToken.balanceOf(HXY_DIVIDENDS_TEAM_FOURTH);
+
+        const secondExpectedBalanceTeamOne = hexAmount.div(new BN(10)).div(new BN(2));
+        const secondExpectedBalanceTeamTwo = expectedBalanceUser.div(new BN(2));
+
+        secondHexBalanceTeamFirst.sub(hexBalanceTeamFirst).should.be.bignumber.equals(secondExpectedBalanceTeamOne);
+        secondHexBalanceTeamSecond.sub(hexBalanceTeamSecond).should.be.bignumber.equals(secondExpectedBalanceTeamOne);
+        secondHexBalanceTeamThird.should.be.bignumber.equals(secondExpectedBalanceTeamTwo);
+        secondHexBalanceTeamFourth.should.be.bignumber.equals(secondExpectedBalanceTeamTwo);
+
+    })
+
+    it('#10 check dividends if not freezed', async () => {
         const rate = await hxyToken.getCurrentHxyRate();
         const hexAmount = (await hxyToken.getRemainingHxyInRound()).mul(rate);
         const maxAmount = await hexExchangeHEX.getMaxAmount();
@@ -430,7 +421,7 @@ contract('exchange', accounts => {
         await hexDividends.claimDividends({from: BUYER_1}).should.be.rejected;
     })
 
-    it('#8 check dividends claiming twice', async () => {
+    it('#11 check dividends claiming twice', async () => {
         const rate = await hxyToken.getCurrentHxyRate();
         const hexAmount = (await hxyToken.getRemainingHxyInRound()).mul(rate);
         const maxAmount = await hexExchangeHEX.getMaxAmount();
@@ -459,7 +450,7 @@ contract('exchange', accounts => {
 
     })
 
-    it('#8 check freeze', async () => {
+    it('#12 check freeze', async () => {
         const rate = await hxyToken.getCurrentHxyRate();
         const hexAmount = (await hxyToken.getRemainingHxyInRound()).mul(rate);
         const maxAmount = await hexExchangeHEX.getMaxAmount();
@@ -484,7 +475,7 @@ contract('exchange', accounts => {
         freezeBalanceAfter.should.be.bignumber.equals(hxyBalance);
     })
 
-    it('#8 check unfreeze', async () => {
+    it('#13 check unfreeze', async () => {
         const rate = await hxyToken.getCurrentHxyRate();
         const hexAmount = (await hxyToken.getRemainingHxyInRound()).mul(rate);
         const maxAmount = await hexExchangeHEX.getMaxAmount();
@@ -514,6 +505,8 @@ contract('exchange', accounts => {
         const freezeId = userFreezings[0];
         const freezing = await hxyToken.getFreezingById(freezeId);
         const freezeStart = freezing.startDate;
+
+        const totalMintedBefore = await hxyToken.getTotalHxyMinted();
 
         await hxyToken.releaseFrozen(freezeStart, {from: BUYER_1}).should.not.be.rejected;
 
@@ -522,9 +515,14 @@ contract('exchange', accounts => {
         const hxyBalanceAfter = await hxyToken.balanceOf(BUYER_1);
         hxyBalanceAfter.should.be.bignumber.above(hxyBalance);
 
+        const totalMintedAfter = await hxyToken.getTotalHxyMinted();
+        totalMintedAfter.should.be.bignumber.equals(totalMintedBefore);
+
     })
 
-    it('#8 check refreeze', async () => {
+
+
+    it('#14 check refreeze', async () => {
         const rate = await hxyToken.getCurrentHxyRate();
         const hexAmount = (await hxyToken.getRemainingHxyInRound()).mul(rate);
         const maxAmount = await hexExchangeHEX.getMaxAmount();
@@ -548,6 +546,9 @@ contract('exchange', accounts => {
         const freezeBalanceAfter = await hxyToken.freezingBalanceOf(BUYER_1)
         freezeBalanceAfter.should.be.bignumber.equals(hxyBalance);
 
+        const latestFreezing = await hxyToken.latestFreezeTimeOf(BUYER_1);
+        latestFreezing.should.be.bignumber.equals(new BN(await getBlockchainTimestamp()));
+
         await timeTo(freezeTime +1);
 
         const userFreezings = await hxyToken.getUserFreezings(BUYER_1);
@@ -555,15 +556,25 @@ contract('exchange', accounts => {
         const freezing = await hxyToken.getFreezingById(freezeId);
         const freezeStart = freezing.startDate;
 
-        const frezeBalanceAfter = await hxyToken.freezingBalanceOf(BUYER_1);
+        const freezeBalanceSecond = await hxyToken.freezingBalanceOf(BUYER_1);
+
         await hxyToken.refreezeHxy(freezeStart, {from: BUYER_1}).should.not.be.rejected;
-
         const refreezeBalance = await hxyToken.freezingBalanceOf(BUYER_1);
-        refreezeBalance.should.be.bignumber.above(frezeBalanceAfter)
+        refreezeBalance.should.be.bignumber.above(freezeBalanceSecond)
 
-        const freezingAfter = await hxyToken.getFreezingById(freezeId);
+        const userFreezingsAfter = await hxyToken.getUserFreezings(BUYER_1);
+        const newFreezeId = userFreezingsAfter[1];
+
+
+        newFreezeId.should.not.be.equals(freezeId);
+        const freezingAfter = await hxyToken.getFreezingById(newFreezeId);
+        const freezeStartAfter = freezingAfter.startDate;
+
+        freezeStartAfter.should.be.bignumber.above(freezeStart);
+        const latestFreezingAfter = await hxyToken.latestFreezeTimeOf(BUYER_1);
+        latestFreezingAfter.should.be.bignumber.equals(new BN(await getBlockchainTimestamp()));
+        latestFreezingAfter.should.be.bignumber.above(latestFreezing);
+
     })
-
-
 
 });

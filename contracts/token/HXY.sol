@@ -18,7 +18,7 @@ contract HXY is ERC20FreezableCapped, HexMoneyTeam {
         uint256 tokenAmount;
     }
 
-    mapping (address => latestFreezing) internal latestFreezingData;
+
 
     // premint amounts
     uint256 internal teamLockPeriod;
@@ -134,6 +134,7 @@ contract HXY is ERC20FreezableCapped, HexMoneyTeam {
     function mintFromDapp(address account, uint256 amount) public {
         address dappAddress = _msgSender();
         require(whitelist.isRegisteredDapp(dappAddress), "must be executed from whitelisted dapp");
+        whitelist.addToDappDailyLimit(dappAddress, amount);
 
         if (whitelist.getDappTradeable(dappAddress)) {
             mint(account, amount);
@@ -146,6 +147,7 @@ contract HXY is ERC20FreezableCapped, HexMoneyTeam {
     function mintFromReferral(address account, uint256 amount) public {
         address referralAddress = _msgSender();
         require(whitelist.isRegisteredReferral(referralAddress), "must be executed from whitelisted referral");
+        whitelist.addToReferralDailyLimit(referralAddress, amount);
 
         if (whitelist.getReferralTradeable(referralAddress)) {
             mint(account, amount);
@@ -184,7 +186,7 @@ contract HXY is ERC20FreezableCapped, HexMoneyTeam {
         uint256 interestAmount = SafeMath.mul(SafeMath.div(frozenTokens, 1000), interestDays);
 
         release(_startDate);
-        mint(_msgSender(), interestAmount);
+        _mint(_msgSender(), interestAmount);
 
 
         totalFrozen = SafeMath.sub(totalFrozen, frozenTokens);
@@ -339,12 +341,6 @@ contract HXY is ERC20FreezableCapped, HexMoneyTeam {
     function _incrementHxyRateRound() internal {
         currentHxyRound = SafeMath.add(currentHxyRound, 1);
         currentHxyRoundRate = SafeMath.mul(hxyRoundBaseRate[currentHxyRound], baseHexToHxyRate);
-    }
-
-    function _setNewFreezeData(address _to, uint256 _startDate, uint256 _lockDays, uint256 _tokenAmount) internal {
-        latestFreezingData[_to].startDate = _startDate;
-        latestFreezingData[_to].lockDays = _lockDays;
-        latestFreezingData[_to].tokenAmount = _tokenAmount;
     }
 
     function _toDecimals(uint256 amount) internal view returns (uint256) {

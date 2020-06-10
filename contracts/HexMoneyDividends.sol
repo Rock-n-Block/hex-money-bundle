@@ -7,159 +7,140 @@ import "./base/HexMoneyInternal.sol";
 
 import "./token/HXY.sol";
 
-contract HexMoneyDividends is HexMoneyTeam, HexMoneyInternal {
-    IERC20 internal hexToken;
+contract HexMoneyDividends is HexMoneyInternal {
     HXY internal hxyToken;
+    IERC20 internal hexToken;
+    IERC20 internal usdcToken;
 
+    address payable firstTeamAddress;
     address payable secondTeamAddress;
+    address payable thirdTeamAddress;
+    address payable fourthTeamAddress;
+
+    struct CurrencyDividends {
+        uint256 beforePrevDayTotal;    // before previous day tokens - for calculating gains on total yesterday
+        uint256 prevDayTotal;          // previous day tokens (total recorded amount)
+        uint256 todayReceived;         // current day tokens (total recorded amount)
+        uint256 todayForClaim;         // total amount for claim - 90% from total of previous day)
+        uint256 todayForTeamOne;       // distributed on beginning of day (10% from total of previous day)
+        uint256 todayForTeamTwo;       // distributed on beginning of day (unclaimed amount from amount to claim in prev day)
+        uint256 todayClaimed;          // total amount of claimed today
+    }
+
+    CurrencyDividends internal hexDividends;
+    CurrencyDividends internal hxyDividends;
+    CurrencyDividends internal ethDividends;
+    CurrencyDividends internal usdcDividends;
+
+    uint256 internal dividendsPercentage = 90;
 
     bool internal _initialRecordTimeSet;
 
-    mapping (address => uint256) internal userClaimedHexDividends;
-    mapping (address => uint256) internal lastHexClaim;
+    uint256 internal totalFrozenHxyToday;
+    uint256 internal dividendsRecordTime;
+    uint256 internal deployedAt;
 
-    uint256 internal hexDecimals = 10 ** 8;
-    uint256 internal dividendsPercentage = 90;
 
-    struct DividendsCurrency {
-        uint256 teamTokens;
-        uint256 previousDayTokens;
-        uint256 claimedTodayTokens;
-        uint256 currentDayTokens;
-    }
+    mapping(address => uint256) internal userClaimedLastTime;
 
-    struct Dividends {
-        DividendsCurrency hexDividends;
-        DividendsCurrency hxyDividends;
-        DividendsCurrency ethDividends;
-        uint256 recordTime;
-    }
 
-    struct DividendsClaimed {
-        uint256 hexAmount;
-        uint256 hxyAmount;
-        uint256 ethAmount;
-    }
-
-    struct DividendsUserClaimed {
-        uint256 hexAmount;
-        uint256 hxyAmount;
-        uint256 ethAmount;
-        uint256 lastClaim;
-    }
-
-    Dividends internal dividends;
-    DividendsClaimed internal totalClaimedDividends;
-
-    mapping(address => DividendsUserClaimed) internal userClaimedDividends;
-
-    constructor (IERC20 newHexToken, HXY newHxyToken, address payable _teamAddress, address payable _secondTeamAddress) public {
-        require(address(newHexToken) != address(0x0), "hex token address should not be empty");
-        require(address(newHxyToken) != address(0x0), "hxy token address should not be empty");
+    constructor (
+        HXY _hxyToken,
+        IERC20 _hexToken,
+        IERC20 _usdcToken,
+        address payable _teamAddress,
+        address payable _secondTeamAddress,
+        address payable _thirdTeamAddress,
+        address payable _fourthTeamAddress
+    )
+        public
+    {
+        require(address(_hxyToken) != address(0x0), "hxy token address should not be empty");
+        require(address(_hexToken) != address(0x0), "hex token address should not be empty");
+        require(address(_usdcToken) != address(0x0), "hex token address should not be empty");
         require(address(_teamAddress) != address(0x0), "team address should not be empty");
         require(address(_secondTeamAddress) != address(0x0), "team address should not be empty");
-        hexToken = newHexToken;
-        hxyToken = newHxyToken;
+        hxyToken = _hxyToken;
+        hexToken = _hexToken;
+        usdcToken = _usdcToken;
+
 
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
-        _setupRole(TEAM_ROLE, _teamAddress);
-        teamAddress = _teamAddress;
+
+        firstTeamAddress = _teamAddress;
         secondTeamAddress = _secondTeamAddress;
+        thirdTeamAddress = _thirdTeamAddress;
+        fourthTeamAddress = _fourthTeamAddress;
 
-        setDeployInitialRecordTime();
+        dividendsRecordTime = SafeMath.add(block.timestamp, SafeMath.mul(1, SECONDS_IN_DAY));
+        deployedAt = block.timestamp;
+        totalFrozenHxyToday = HXY(hxyToken).getTotalFrozen();
     }
 
-    function getTodayDividends(address _addr) public view returns(uint256[3] memory) {
-        uint256 userFrozenBalance = HXY(hxyToken).freezingBalanceOf(_addr);
-        uint256 hexAmount;
-        uint256 hxyAmount;
+
+    function getTodayDividendsTotal() public view returns (uint256[4] memory) {
+        return [
+            ethDividends.todayReceived,
+            hxyDividends.todayReceived,
+            hexDividends.todayReceived,
+            usdcDividends.todayReceived
+        ];
+    }
+
+    function getPreviousDividendsTotal() public view returns (uint256[4] memory) {
+        return [
+            ethDividends.prevDayTotal,
+            hxyDividends.prevDayTotal,
+            hexDividends.prevDayTotal,
+            usdcDividends.prevDayTotal
+        ];
+
+    }
+
+    function getAvailableDividends(address account) public view returns(uint256[4] memory) {
+        uint256 userFrozenBalance = HXY(hxyToken).freezingBalanceOf(account);
+
         uint256 ethAmount;
-
-        if (userFrozenBalance != 0) {
-            uint256 totalFrozen = HXY(hxyToken).getTotalFrozen();
-
-            uint256 userFrozenPercentage = SafeMath.div(userFrozenBalance, totalFrozen);
-            hexAmount = _getClaimAmount(dividends.hexDividends.currentDayTokens, userFrozenPercentage);
-            hxyAmount = _getClaimAmount(dividends.hxyDividends.currentDayTokens, userFrozenPercentage);
-            ethAmount = _getClaimAmount(dividends.ethDividends.currentDayTokens, userFrozenPercentage);
-        }
-        return [hexAmount, hxyAmount, ethAmount];
-    }
-
-    function getTodayDividendsTotal() public view returns (uint256[3] memory) {
-        return [
-            dividends.hexDividends.currentDayTokens,
-            dividends.hxyDividends.currentDayTokens,
-            dividends.ethDividends.currentDayTokens
-        ];
-    }
-
-    function getAvailableDividends(address _addr) public view returns(uint256[3] memory) {
-        uint256 userFrozenBalance = HXY(hxyToken).freezingBalanceOf(_addr);
-        uint256 hexAmount;
         uint256 hxyAmount;
-        uint256 ethAmount;
+        uint256 hexAmount;
+        uint256 usdcAmount;
 
-        if (userFrozenBalance != 0) {
-            uint256 totalFrozen = HXY(hxyToken).getTotalFrozen();
-
-            uint256 userFrozenPercentage = SafeMath.div(userFrozenBalance, totalFrozen);
-            hexAmount = _getClaimAmount(dividends.hexDividends.previousDayTokens, userFrozenPercentage);
-            hxyAmount = _getClaimAmount(dividends.hxyDividends.previousDayTokens, userFrozenPercentage);
-            ethAmount = _getClaimAmount(dividends.ethDividends.previousDayTokens, userFrozenPercentage);
+        if (userFrozenBalance > 0) {
+            ethAmount = getClaimAmount(ethDividends.todayForClaim, userFrozenBalance);
+            hxyAmount = getClaimAmount(hxyDividends.todayForClaim, userFrozenBalance);
+            hexAmount = getClaimAmount(hexDividends.todayForClaim, userFrozenBalance);
+            usdcAmount = getClaimAmount(usdcDividends.todayForClaim, userFrozenBalance);
         }
-        return [hexAmount, hxyAmount, ethAmount];
+        return [ethAmount, hxyAmount, hexAmount, usdcAmount];
     }
 
-    function getAvailableDividendsTotal() public view returns(uint256[3] memory) {
+    function getUserLastClaim(address account) public view returns(uint256) {
+        return userClaimedLastTime[account];
+    }
+
+    function getAvailableDividendsTotal() public view returns (uint256[4] memory ) {
         return [
-            dividends.hexDividends.previousDayTokens,
-            dividends.hxyDividends.previousDayTokens,
-            dividends.ethDividends.previousDayTokens
+            ethDividends.todayForClaim,
+            hxyDividends.todayForClaim,
+            hexDividends.todayForClaim,
+            usdcDividends.todayForClaim
         ];
 
     }
 
-    function getClaimedDividends(address _addr) public view returns (uint256[4] memory) {
-        DividendsUserClaimed memory divs = userClaimedDividends[_addr];
-        return [divs.hexAmount, divs.hxyAmount, divs.ethAmount, divs.lastClaim];
-    }
-
-
-    function getClaimedDividendsYesterday() public view returns (uint256[3] memory) {
+    function getClaimedDividendsTotal() public view returns (uint256[4] memory ){
         return [
-            dividends.hexDividends.claimedTodayTokens,
-            dividends.hxyDividends.claimedTodayTokens,
-            dividends.ethDividends.claimedTodayTokens
+            ethDividends.todayClaimed,
+            hxyDividends.todayClaimed,
+            hexDividends.todayClaimed,
+            usdcDividends.todayClaimed
         ];
-    }
 
-    function getClaimedDividendsTotal() public view returns (uint256[3] memory) {
-        return [
-            totalClaimedDividends.hexAmount,
-            totalClaimedDividends.hxyAmount,
-            totalClaimedDividends.ethAmount
-        ];
     }
 
     function getRecordTime() public view returns (uint256) {
-        return dividends.recordTime;
-    }
+        return dividendsRecordTime;
 
-    function getBlock() public view returns (uint256) {
-        return block.timestamp;
-    }
-
-    function getRemainingRecordTime() public view returns (uint256) {
-        if (block.timestamp < dividends.recordTime) {
-            return SafeMath.sub(dividends.recordTime, block.timestamp);
-        } else {
-            uint256 daysPassed = SafeMath.div(SafeMath.sub(block.timestamp, dividends.recordTime), SECONDS_IN_DAY);
-            daysPassed = (daysPassed < 1) ? 1 : daysPassed;
-
-            uint256 adjustedRecordTime = SafeMath.add(dividends.recordTime, SafeMath.mul(daysPassed, SECONDS_IN_DAY));
-            return SafeMath.sub(adjustedRecordTime, block.timestamp);
-        }
     }
 
     function getDividendsPercentage() public view returns (uint256) {
@@ -174,89 +155,49 @@ contract HexMoneyDividends is HexMoneyTeam, HexMoneyInternal {
         return address(hxyToken);
     }
 
-    function recordDividendsHEX(uint256 amount) public {
-        require(IERC20(hexToken).allowance(_msgSender(), address(this)) >= amount, "amount to record is not available to transfer");
-        require(IERC20(hexToken).transferFrom(_msgSender(), address(this), amount), "cannot transfer amount from sender");
-
-        _postprocessDividends(dividends.hexDividends, amount);
-    }
-
-    function recordDividendsHXY(uint256 amount) public {
-        require(IERC20(hxyToken).allowance(_msgSender(), address(this)) >= amount, "amount to record is not available to transfer");
-        require(IERC20(hxyToken).transferFrom(_msgSender(), address(this), amount), "cannot transfer amount from sender");
-
-        _postprocessDividends(dividends.hxyDividends, amount);
-    }
-
     receive() external payable {
-         _postprocessDividends(dividends.ethDividends, msg.value);
+        updateAndSendDividends();
+        ethDividends.todayReceived = SafeMath.add(ethDividends.todayReceived, msg.value);
     }
 
     function recordDividendsETH() public payable {
         require(msg.value != 0, "value must be supplied in call to record dividends");
-        _postprocessDividends(dividends.ethDividends, msg.value);
+
+        updateAndSendDividends();
+        ethDividends.todayReceived = SafeMath.add(ethDividends.todayReceived, msg.value);
     }
+
+    function recordDividendsHEX(uint256 amount) public {
+        _recordDividendsErc20(address(hexToken), hexDividends, amount);
+
+    }
+
+    function recordDividendsHXY(uint256 amount) public {
+        _recordDividendsErc20(address(hxyToken), hxyDividends, amount);
+    }
+
+    function recordDividendsUSDC(uint256 amount) public {
+        _recordDividendsErc20(address(usdcToken), usdcDividends, amount);
+    }
+
+
 
     function claimDividends() public {
-        _checkUpdateDividendsAll();
+        updateAndSendDividends();
 
         uint256 userFrozenBalance = HXY(hxyToken).freezingBalanceOf(_msgSender());
+        uint256 userLastFreeze = HXY(hxyToken).latestFreezeTimeOf(_msgSender());
         require(userFrozenBalance != 0, "must be freezed amount of HXY to claim dividends");
-        require(userClaimedDividends[_msgSender()].lastClaim <= dividends.recordTime, "tokens already claimed today");
+        require(userLastFreeze < SafeMath.sub(dividendsRecordTime, (SafeMath.mul(1, SECONDS_IN_DAY))), "cannot claim if freezed today");
+        require(userClaimedLastTime[_msgSender()] < dividendsRecordTime, "tokens already claimed today");
 
-        uint256 totalFrozen = HXY(hxyToken).getTotalFrozen();
-        uint256 userFrozenPercentage = SafeMath.div(userFrozenBalance, totalFrozen);
+        processClaimHex(userFrozenBalance);
+        processClaimHxy(userFrozenBalance);
+        processClaimUsdc(userFrozenBalance);
+        processClaimEth(userFrozenBalance);
 
-        _processClaimHex(userFrozenPercentage);
-        _processClaimHxy(userFrozenPercentage);
-        _processClaimEth(userFrozenPercentage);
+        userClaimedLastTime[_msgSender()] = block.timestamp;
 
-        userClaimedDividends[_msgSender()].lastClaim = block.timestamp;
-    }
-
-    function _processClaimHex(uint256 _userFrozenPercentage) internal {
-        uint256 amount = _getClaimAmount(dividends.hexDividends.previousDayTokens, _userFrozenPercentage);
-
-        if (amount != 0) {
-            require(IERC20(hexToken).transfer(_msgSender(), amount), "fail in transfer HEX dividends");
-
-            userClaimedDividends[_msgSender()].hexAmount = SafeMath.add(userClaimedDividends[_msgSender()].hexAmount, amount);
-            totalClaimedDividends.hexAmount = SafeMath.add(totalClaimedDividends.hexAmount, amount);
-            dividends.hexDividends.claimedTodayTokens = SafeMath.add(dividends.hexDividends.claimedTodayTokens, amount);
-        }
-    }
-
-    function _processClaimHxy(uint256 _userFrozenPercentage) internal {
-        uint256 amount = _getClaimAmount(dividends.hxyDividends.previousDayTokens, _userFrozenPercentage);
-
-        if (amount != 0) {
-            require(IERC20(hxyToken).transfer(_msgSender(), amount), "fail in transfer HXY dividends");
-
-            userClaimedDividends[_msgSender()].hxyAmount = SafeMath.add(userClaimedDividends[_msgSender()].hxyAmount, amount);
-            totalClaimedDividends.hxyAmount = SafeMath.add(totalClaimedDividends.hxyAmount, amount);
-            dividends.hxyDividends.claimedTodayTokens = SafeMath.add(dividends.hxyDividends.claimedTodayTokens, amount);
-        }
-    }
-
-    function _processClaimEth(uint256 _userFrozenPercentage) internal {
-        uint256 amount = _getClaimAmount(dividends.ethDividends.previousDayTokens, _userFrozenPercentage);
-
-        if (amount != 0) {
-            _msgSender().transfer(amount);
-
-            userClaimedDividends[_msgSender()].ethAmount = SafeMath.add(userClaimedDividends[_msgSender()].ethAmount, amount);
-            totalClaimedDividends.ethAmount = SafeMath.add(totalClaimedDividends.ethAmount, amount);
-            dividends.ethDividends.claimedTodayTokens = SafeMath.add(dividends.ethDividends.claimedTodayTokens, amount);
-        }
-    }
-
-    function _getClaimAmount(uint256 currencyPrevDayAmount, uint256 userFrozenPercentage) internal view returns (uint256) {
-        uint256 dailyDividendsAmount = SafeMath.div(SafeMath.mul(currencyPrevDayAmount, dividendsPercentage), 100);
-        return SafeMath.mul(dailyDividendsAmount,userFrozenPercentage);
-    }
-
-    function manualCheckUpdateDividends() public {
-        _checkUpdateDividendsAll();
     }
 
     function setHexToken(address newHexToken) public onlyAdminRole {
@@ -281,97 +222,175 @@ contract HexMoneyDividends is HexMoneyTeam, HexMoneyInternal {
         _initialRecordTimeSet = true;
     }
 
-    function setDeployInitialRecordTime() internal {
-        dividends.recordTime = SafeMath.add(block.timestamp, SafeMath.mul(1, SECONDS_IN_DAY));
-    }
-
     function _setInitialRecordTime(uint256 _recordTime) internal {
-        dividends.recordTime = _recordTime;
+        dividendsRecordTime = _recordTime;
     }
 
-    function _postprocessDividends(DividendsCurrency storage currencyDividends, uint256 _amount) internal {
-        _checkUpdateDividendsAll();
-        currencyDividends.currentDayTokens = SafeMath.add(currencyDividends.currentDayTokens, _amount);
+    function _recordDividendsErc20(address erc20token, CurrencyDividends storage currencyDividends, uint256 amount) internal {
+        require(IERC20(erc20token).allowance(_msgSender(), address(this)) >= amount, "amount to record is not available to transfer");
+        require(IERC20(erc20token).transferFrom(_msgSender(), address(this), amount), "cannot transfer amount from sender");
+
+        updateAndSendDividends();
+        currencyDividends.todayReceived = SafeMath.add(currencyDividends.todayReceived, amount);
     }
 
-    function _checkUpdateDividendsAll() internal {
-        (uint256 teamAmountHex, bool haveUnclaimedHex) = _checkUpdateDividends(dividends.hexDividends);
-        (uint256 teamAmountHxy, bool haveUnclaimedHxy) = _checkUpdateDividends(dividends.hxyDividends);
-        (uint256 teamAmountEth, bool haveUnclaimedEth) = _checkUpdateDividends(dividends.ethDividends);
-
-        if (teamAmountHex > 0) {
-            _transferTeamHex(teamAmountHex, haveUnclaimedHex);
-        }
-
-        if (teamAmountHxy > 0) {
-            _transferTeamHxy(teamAmountHxy, haveUnclaimedHxy);
-        }
-
-        if (teamAmountEth > 0) {
-            _transferTeamEth(teamAmountEth, haveUnclaimedEth);
-         }
+    function getClaimAmount(uint256 todayForClaim, uint256 userFrozen) internal view returns (uint256){
+        return SafeMath.div(SafeMath.mul(todayForClaim, userFrozen), totalFrozenHxyToday);
     }
 
-    function _checkUpdateDividends(DividendsCurrency storage currencyDividends) internal returns (uint256 teamAmount, bool haveUnclaimed) {
-        if (block.timestamp > dividends.recordTime) {
-            uint256 daysPassed = SafeMath.div(SafeMath.sub(block.timestamp, dividends.recordTime), SECONDS_IN_DAY);
-            dividends.recordTime = SafeMath.add(dividends.recordTime, SafeMath.mul(daysPassed, SECONDS_IN_DAY));
+    function processClaimEth(uint256 userFrozen) internal {
+        if (ethDividends.todayForClaim > 0) {
 
-            uint256 prevDayTokens;
-            if (daysPassed <= 1) {
-                prevDayTokens = currencyDividends.previousDayTokens;
-                currencyDividends.previousDayTokens = currencyDividends.currentDayTokens;
-            } else {
-                prevDayTokens = SafeMath.add(currencyDividends.previousDayTokens, currencyDividends.currentDayTokens);
-                currencyDividends.previousDayTokens = 0;
-            }
-
-            uint256 userDividendsAmount = SafeMath.div(SafeMath.mul(prevDayTokens, dividendsPercentage), 100);
-            uint256 unclaimedAmount;
-            if (currencyDividends.claimedTodayTokens < userDividendsAmount) {
-                unclaimedAmount = SafeMath.sub(userDividendsAmount, currencyDividends.claimedTodayTokens);
-                teamAmount = SafeMath.div(SafeMath.mul(unclaimedAmount, 80), 100);
-                haveUnclaimed = true;
-
-                uint256 toNextDay = SafeMath.sub(unclaimedAmount, teamAmount);
-                currencyDividends.currentDayTokens = toNextDay;
-            } else {
-                 teamAmount = SafeMath.sub(prevDayTokens, userDividendsAmount);
-                 currencyDividends.currentDayTokens = 0;
-                 haveUnclaimed = false;
-            }
-
-            currencyDividends.claimedTodayTokens = 0;
-
+            //uint256 amount = SafeMath.div(SafeMath.mul(ethDividends.todayForClaim, userFrozen), totalFrozenHxyToday);
+            uint256 amount = getClaimAmount(ethDividends.todayForClaim, userFrozen);
+            _msgSender().transfer(amount);
+            ethDividends.todayClaimed = SafeMath.add(ethDividends.todayClaimed, amount);
         }
     }
 
-    function _transferTeamHex(uint256 _amount, bool _haveUnclaimed) internal {
-        (uint256 firstAmount, uint256 secondAmount) = _getTeamAmounts(_amount, _haveUnclaimed);
-        IERC20(hexToken).transfer(teamAddress, firstAmount);
-        IERC20(hexToken).transfer(secondTeamAddress, secondAmount);
+    function _processClaimErc20(address erc20token, CurrencyDividends storage currencyDividends, uint256 userFrozen) internal {
+        if (currencyDividends.todayForClaim > 0) {
+
+            //uint256 amount = SafeMath.div(SafeMath.mul(currencyDividends.todayForClaim, userFrozen), totalFrozenHxyToday);
+            uint256 amount = getClaimAmount(currencyDividends.todayForClaim, userFrozen);
+            require(IERC20(erc20token).transfer(_msgSender(), amount), "fail in transfer HEX dividends");
+            currencyDividends.todayClaimed = SafeMath.add(currencyDividends.todayClaimed, amount);
+        }
     }
 
-    function _transferTeamHxy(uint256 _amount, bool _haveUnclaimed) internal {
-        (uint256 firstAmount, uint256 secondAmount) = _getTeamAmounts(_amount, _haveUnclaimed);
-        HXY(hxyToken).transfer(teamAddress, firstAmount);
-        HXY(hxyToken).transfer(secondTeamAddress, secondAmount);
+    function processClaimHex(uint256 userFrozen) internal {
+        _processClaimErc20(address(hexToken), hexDividends, userFrozen);
     }
 
-    function _transferTeamEth(uint256 _amount, bool _haveUnclaimed) internal {
-        (uint256 firstAmount, uint256 secondAmount) = _getTeamAmounts(_amount, _haveUnclaimed);
-        teamAddress.transfer(firstAmount);
-        secondTeamAddress.transfer(secondAmount);
+    function processClaimHxy(uint256 userFrozen) internal {
+        _processClaimErc20(address(hxyToken), hxyDividends, userFrozen);
     }
 
-    function _getTeamAmounts(uint256 fullAmount, bool haveUnclaimed) internal pure returns (uint256 firstAmount, uint256 secondAmount) {
+    function processClaimUsdc(uint256 userFrozen) internal {
+        _processClaimErc20(address(usdcToken), usdcDividends, userFrozen);
+    }
+
+
+    function isNewDayStarted() internal view returns (bool) {
+        return block.timestamp > dividendsRecordTime ? true : false;
+    }
+
+    function isInitialDeployTime() internal view returns (bool) {
+        return block.timestamp < SafeMath.add(deployedAt, SafeMath.mul(1, SECONDS_IN_DAY));
+    }
+
+
+    function _updateDividends(CurrencyDividends storage currencyDividends) internal {
+        // amount of tokens available for claiming today
+        uint256 userTokensToClaim = SafeMath.div(SafeMath.mul(currencyDividends.todayReceived, dividendsPercentage), 100);
+
+        // amount of tokens distributed for team one
+        currencyDividends.todayForTeamOne = SafeMath.sub(currencyDividends.todayReceived, userTokensToClaim);
+
+        // amount of tokens distributed for team two
+        uint256 tokensToTeamTwo;
+        if (currencyDividends.todayForClaim > currencyDividends.todayClaimed) {
+            tokensToTeamTwo = SafeMath.sub(currencyDividends.todayForClaim, currencyDividends.todayClaimed);
+        }
+
+        currencyDividends.todayForTeamTwo = tokensToTeamTwo;
+
+        // resetting new amount of  claimable tokens for today
+        currencyDividends.todayForClaim = userTokensToClaim;
+
+        // moving total recorded amount to previous days, resetting amounts for today
+        currencyDividends.todayClaimed = 0;
+        currencyDividends.beforePrevDayTotal = currencyDividends.prevDayTotal;
+        currencyDividends.prevDayTotal = currencyDividends.todayReceived;
+        currencyDividends.todayReceived = 0;
+    }
+
+    function getTeamAmountCurrency(CurrencyDividends storage currencyDividends, bool _haveUnclaimed)
+        internal
+        view
+        returns (uint256[4] memory amounts)
+    {
+        uint256 firstAddressAmount = SafeMath.div(currencyDividends.todayForTeamOne, 2);
+        uint256 secondAddressAmount = SafeMath.sub(currencyDividends.todayForTeamOne, firstAddressAmount);
+
+        uint256 thirdAddressAmount;
+        uint256 fourthAddressAmount;
+        if (_haveUnclaimed) {
+            thirdAddressAmount = SafeMath.div(currencyDividends.todayForTeamTwo, 2);
+            fourthAddressAmount = SafeMath.sub(currencyDividends.todayForTeamTwo, thirdAddressAmount);
+        }
+
+        amounts = [firstAddressAmount, secondAddressAmount, thirdAddressAmount, fourthAddressAmount];
+    }
+
+    function transferTeamEth() internal {
+        bool haveUnclaimed = ethDividends.todayForTeamTwo > 0 ? true : false;
+
+        uint256[4] memory teamAmounts = getTeamAmountCurrency(ethDividends, haveUnclaimed);
+
+        firstTeamAddress.transfer(teamAmounts[0]);
+        secondTeamAddress.transfer(teamAmounts[0]);
+
         if (haveUnclaimed) {
-            firstAmount = SafeMath.div(SafeMath.mul(fullAmount, 9), 10);
-            secondAmount = SafeMath.sub(fullAmount, firstAmount);
-        } else {
-            firstAmount = SafeMath.div(fullAmount, 2);
-            secondAmount = SafeMath.sub(fullAmount, firstAmount);
+            thirdTeamAddress.transfer(teamAmounts[0]);
+            thirdTeamAddress.transfer(teamAmounts[0]);
+        }
+    }
+
+    function _transferTeamErc20(address erc20token, CurrencyDividends storage currencyDividends) internal {
+        bool haveUnclaimed = currencyDividends.todayForTeamTwo > 0 ? true : false;
+
+        uint256[4] memory teamAmounts = getTeamAmountCurrency(currencyDividends, haveUnclaimed);
+
+        if (currencyDividends.todayForTeamOne > 0) {
+            IERC20(erc20token).transfer(firstTeamAddress, teamAmounts[0]);
+            IERC20(erc20token).transfer(secondTeamAddress, teamAmounts[1]);
         }
 
+        if (haveUnclaimed) {
+            IERC20(erc20token).transfer(thirdTeamAddress, teamAmounts[2]);
+            IERC20(erc20token).transfer(fourthTeamAddress, teamAmounts[3]);
+        }
     }
+
+    function transferTeamHex() internal {
+        _transferTeamErc20(address(hexToken), hexDividends);
+    }
+
+    function transferTeamHxy() internal {
+        _transferTeamErc20(address(hxyToken), hxyDividends);
+    }
+
+    function transfertTeamUsdc() internal {
+        _transferTeamErc20(address(usdcToken), usdcDividends);
+    }
+
+    function transferTeamAllCurrencies() internal {
+        transferTeamEth();
+        transferTeamHxy();
+        transferTeamHex();
+        transfertTeamUsdc();
+    }
+
+    function updateDividendsForAllCurrencies() internal {
+        _updateDividends(ethDividends);
+        _updateDividends(hxyDividends);
+        _updateDividends(hexDividends);
+        _updateDividends(usdcDividends);
+
+        uint256 timeAfterRecord = SafeMath.sub(block.timestamp, dividendsRecordTime);
+        uint256 daysPassed = timeAfterRecord > SECONDS_IN_DAY ? SafeMath.div(timeAfterRecord, SECONDS_IN_DAY) : 1;
+        dividendsRecordTime = SafeMath.add(dividendsRecordTime, SafeMath.mul(daysPassed, SECONDS_IN_DAY));
+
+        totalFrozenHxyToday = HXY(hxyToken).getTotalFrozen();
+    }
+
+    function updateAndSendDividends() internal {
+        if (isNewDayStarted()) {
+            updateDividendsForAllCurrencies();
+            transferTeamAllCurrencies();
+        }
+    }
+
+
 }

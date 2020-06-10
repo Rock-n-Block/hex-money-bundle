@@ -5,6 +5,8 @@ library  WhitelistLib {
         bool tradeable;
         uint256 lockPeriod;
         uint256 dailyLimit;
+        uint256 dailyLimitToday;
         uint256 addedAt;
+        uint256 recordTime;
     }
 }
