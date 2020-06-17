@@ -19,10 +19,15 @@
  */
 
 const HDWalletProvider = require('@truffle/hdwallet-provider');
-const infuraKey = "fj4jll3k.....";
+require('dotenv').config({ path: '../.env' })
 
-const fs = require('fs');
-const mnemonic = fs.readFileSync(".secret").toString().trim();
+const {
+  DEPLOYER_MNEMONIC,
+  ETHERSCAN_API_KEY,
+  INFURA_KOVAN,
+  INFURA_ROPSTEN,
+  INFURA_MAINNET
+} = process.env
 
 const ganache = require('ganache-core');
 const BN = require('bn.js');
@@ -71,12 +76,12 @@ module.exports = {
     ropsten: {
       provider: () =>
         new HDWalletProvider(
-          mnemonic,
-          `https://ropsten.infura.io/v3/7ca80e3732bf4b9da67ebd25fa384b20`,
+          DEPLOYER_MNEMONIC.toString(),
+          INFURA_ROPSTEN,
         ),
       network_id: 3, // Ropsten's id
       gas: 7900000, // Ropsten has a lower block limit than mainnet
-      gasPrice: 1000000000,
+      gasPrice: 45000000000,  
       //confirmations: 2, // # of confs to wait between deployments. (default: 0)
       timeoutBlocks: 200, // # of blocks before a deployment times out  (minimum/default: 50)
       skipDryRun: true, // Skip dry run before migrations? (default: false for public nets )
@@ -84,11 +89,12 @@ module.exports = {
     kovan: {
       provider: () =>
         new HDWalletProvider(
-          mnemonic,
-          `https://kovan.infura.io/v3/7ca80e3732bf4b9da67ebd25fa384b20`,
+          DEPLOYER_MNEMONIC.toString(),
+          INFURA_KOVAN,
         ),
       network_id: 42, // Kovan's id
       gas: 7900000, // Ropsten has a lower block limit than mainnet
+      gasPrice: 38000000000,  // 20 gwei (in wei) (default: 100 gwei)
       confirmations: 2, // # of confs to wait between deployments. (default: 0)
       timeoutBlocks: 200, // # of blocks before a deployment times out  (minimum/default: 50)
       skipDryRun: true, // Skip dry run before migrations? (default: false for public nets )
@@ -96,13 +102,14 @@ module.exports = {
     live: {
       provider: () =>
         new HDWalletProvider(
-          mnemonic,
-          `https://mainnet.infura.io/v3/${infuraKey}`,
+          DEPLOYER_MNEMONIC.toString(),
+          INFURA_MAINNET,
         ),
       network_id: 1, // Mainnet's id
-      gas: 1, // gas block limit
+      gas: 8000000, // gas block limit
+      gasPrice: 43000000000,  // 20 gwei (in wei) (default: 100 gwei)
       confirmations: 2, // # of confs to wait between deployments. (default: 0)
-      timeoutBlocks: 200, // # of blocks before a deployment times out  (minimum/default: 50)
+      timeoutBlocks: 1000, // # of blocks before a deployment times out  (minimum/default: 50)
       skipDryRun: false, // Skip dry run before migrations? (default: false for public nets )
     },
     ganache: {
@@ -110,11 +117,13 @@ module.exports = {
       provider: ganache.provider({
           total_accounts: 15, // eslint-disable-line camelcase
           default_balance_ether: new BN(1e+5), // eslint-disable-line camelcase
-          mnemonic: 'mywish',
+          DEPLOYER_MNEMONIC: 'mywish',
           time: new Date('2020-04-21T12:00:00Z'),
           debug: false,
+          gasLimit: 8500000,
           // ,logger: console
       }),
+      //gas: 9000000, // gas block limit
     },
     // Useful for private networks
     // private: {
@@ -143,5 +152,11 @@ module.exports = {
       // }
     },
   },
-  plugins: ['solidity-coverage'],
+  plugins: [
+	  'solidity-coverage',
+	  'truffle-plugin-verify'
+  ],
+  api_keys: {
+	  etherscan: ETHERSCAN_API_KEY
+  }
 };

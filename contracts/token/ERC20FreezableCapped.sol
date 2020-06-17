@@ -81,12 +81,17 @@ abstract contract ERC20FreezableCapped is ERC20, HexMoneyInternal {
         return freezingsByUser[_user];
     }
 
-    function getFreezingById(bytes32 freezingId) public view returns (address user, uint256 startDate, uint256 freezeDays, uint256 freezeAmount) {
+    function getFreezingById(bytes32 freezingId)
+        public
+        view
+        returns (address user, uint256 startDate, uint256 freezeDays, uint256 freezeAmount, bool capitalized)
+    {
         Freezing memory userFreeze = freezings[freezingId];
         user = userFreeze.user;
         startDate = userFreeze.startDate;
         freezeDays = userFreeze.freezeDays;
         freezeAmount = userFreeze.freezeAmount;
+        capitalized = userFreeze.capitalized;
     }
 
 
@@ -94,7 +99,7 @@ abstract contract ERC20FreezableCapped is ERC20, HexMoneyInternal {
         require(_to != address(0x0), "FreezeContract: address cannot be zero");
         require(_start >= block.timestamp, "FreezeContract: start date cannot be in past");
         require(_freezeDays >= 0, "FreezeContract: amount of freeze days cannot be zero");
-        require(_amount <= _balances[_to]);
+        require(_amount <= _balances[_msgSender()], "FreezeContract: freeze amount exceeds unfrozen balance");
 
         Freezing memory userFreeze = Freezing({
             user: _to,
@@ -106,7 +111,7 @@ abstract contract ERC20FreezableCapped is ERC20, HexMoneyInternal {
 
         bytes32 freezeId = _toFreezeKey(_to, _start);
 
-        _balances[msg.sender] = _balances[msg.sender].sub(_amount);
+        _balances[_msgSender()] = _balances[_msgSender()].sub(_amount);
         freezingBalance[_to] = freezingBalance[_to].add(_amount);
 
         freezings[freezeId] = userFreeze;
@@ -197,6 +202,7 @@ abstract contract ERC20FreezableCapped is ERC20, HexMoneyInternal {
         latestFreezingTime[userFreeze.user] = block.timestamp;
 
         _deleteFreezing(freezeId, freezingsByUser[_msgSender()]);
+        delete freezings[freezeId];
 
         emit Released(_msgSender(), oldFreezeAmount);
         emit Transfer(_msgSender(), _msgSender(), addAmount);
@@ -204,10 +210,19 @@ abstract contract ERC20FreezableCapped is ERC20, HexMoneyInternal {
     }
 
     function _deleteFreezing(bytes32 freezingId, bytes32[] storage userFreezings) internal {
+        uint256 freezingIndex;
+        bool freezingFound;
         for (uint256 i; i < userFreezings.length; i++) {
             if (userFreezings[i] == freezingId) {
-                delete userFreezings[i];
+                freezingIndex = i;
+                freezingFound = true;
             }
+        }
+
+        if (freezingFound) {
+            userFreezings[freezingIndex] = userFreezings[userFreezings.length - 1];
+            delete userFreezings[userFreezings.length - 1];
+            userFreezings.pop();
         }
     }
 

@@ -4,7 +4,8 @@ import '@openzeppelin/contracts/token/ERC20/ERC20.sol';
 
 contract USDC is ERC20 {
     constructor(address account, uint256 initialSupply) ERC20("TST-USDC", "TST-USDC") public {
-        _setupDecimals(18);
+        //_setupDecimals(6);
+        _setupDecimals(8);
         _mint(account, initialSupply);
     }
 

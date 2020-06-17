@@ -8,31 +8,27 @@ import "../whitelist/WhitelistLib.sol";
 import "../whitelist/HexWhitelist.sol";
 
 contract HXY is ERC20FreezableCapped, HexMoneyTeam {
-
     using WhitelistLib for WhitelistLib.AllowedAddress;
 
-    // latest freezing info for user
-    struct latestFreezing {
-        uint256 startDate;
-        uint256 lockDays;
-        uint256 tokenAmount;
-    }
-
-
-
-    // premint amounts
-    uint256 internal teamLockPeriod;
-    uint256 internal teamSupply = SafeMath.mul(12, 10 ** 14);
-    uint256 internal teamFreezeStart;
-
-    uint256 internal liquidSupply = SafeMath.mul(6, 10 ** 14);
+    uint256 internal liquidSupply = 694866350105876;
     uint256 internal lockedSupply = SafeMath.mul(6, 10 ** 14);
-    uint256 internal migratedSupply = SafeMath.mul(750, 10 ** 11);
 
     uint256 internal lockedSupplyFreezingStarted;
 
     address internal lockedSupplyAddress;
     address internal liquidSupplyAddress;
+
+    struct LockedSupplyAddresses {
+        address firstAddress;
+        address secondAddress;
+        address thirdAddress;
+        address fourthAddress;
+        address fifthAddress;
+        address sixthAddress;
+    }
+
+    LockedSupplyAddresses internal lockedSupplyAddresses;
+    bool internal lockedSupplyPreminted;
 
     // total amounts variables
     uint256 internal totalMinted;
@@ -54,18 +50,21 @@ contract HXY is ERC20FreezableCapped, HexMoneyTeam {
 
 
 
-    constructor(address payable _teamAddress,  address _liqSupAddress, address _lockSupAddress, address _migratedSupplyAddress)
-    ERC20FreezableCapped(SafeMath.mul(60,  10 ** 14))        // cap = 60,000,000
-    ERC20("HXY", "HXY")
+    //constructor(address payable _teamAddress,  address _liqSupAddress, address _lockSupAddress, address _migratedSupplyAddress)
+    constructor(address _whitelistAddress,  address _liqSupAddress, uint256 _liqSupAmount)
     public
+    ERC20FreezableCapped(SafeMath.mul(60,  10 ** 14))        // cap = 60,000,000
+    ERC20("HEX Money", "HXY")
     {
+        require(address(_whitelistAddress) != address(0x0), "whitelist address should not be empty");
+        require(address(_liqSupAddress) != address(0x0), "liquid supply address should not be empty");
         _setupDecimals(8);
-        _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
 
-        _premintForTeam(_teamAddress, 365);
-        _premintLiquidSupply(_liqSupAddress);
-        _premintLockedSupply(_lockSupAddress);
-        _premintMigratedSupply(_migratedSupplyAddress);
+        _setupRole(DEPLOYER_ROLE, _msgSender());
+
+
+        whitelist = HexWhitelist(_whitelistAddress);
+        _premintLiquidSupply(_liqSupAddress, _liqSupAmount);
     }
 
     function getRemainingHxyInRound() public view returns (uint256) {
@@ -100,22 +99,6 @@ contract HXY is ERC20FreezableCapped, HexMoneyTeam {
         return totalPayedInterest;
     }
 
-    function getTeamSupply() public view returns (uint256) {
-        return teamSupply;
-    }
-
-    function getTeamLockPeriod() public view returns (uint256) {
-        return teamLockPeriod;
-    }
-
-    function getLockedSupply() public view returns (uint256) {
-        return freezingBalanceOf(lockedSupplyAddress);
-    }
-
-    function getLockedSupplyAddress() public view returns (address) {
-        return lockedSupplyAddress;
-    }
-
 
     function getCurrentInterestAmount(address _addr, uint256 _freezeStartDate) public view returns (uint256) {
         bytes32 freezeId = _toFreezeKey(_addr, _freezeStartDate);
@@ -131,29 +114,33 @@ contract HXY is ERC20FreezableCapped, HexMoneyTeam {
         }
     }
 
-    function mintFromDapp(address account, uint256 amount) public {
-        address dappAddress = _msgSender();
-        require(whitelist.isRegisteredDapp(dappAddress), "must be executed from whitelisted dapp");
-        whitelist.addToDappDailyLimit(dappAddress, amount);
+    function mintFromExchange(address account, uint256 amount) public {
+        address executionAddress = _msgSender();
+        require(whitelist.isRegisteredExchange(executionAddress), "must be executed from whitelisted dapp");
+        whitelist.addToExchangeDailyLimit(executionAddress, amount);
 
-        if (whitelist.getDappTradeable(dappAddress)) {
+        if (whitelist.getExchangeTradeable(executionAddress)) {
             mint(account, amount);
         } else {
-            uint256 lockPeriod = whitelist.getDappLockPeriod(dappAddress);
+            uint256 lockPeriod = whitelist.getExchangeLockPeriod(executionAddress);
             mintAndFreezeTo(account, amount, lockPeriod);
         }
     }
 
-    function mintFromReferral(address account, uint256 amount) public {
-        address referralAddress = _msgSender();
-        require(whitelist.isRegisteredReferral(referralAddress), "must be executed from whitelisted referral");
-        whitelist.addToReferralDailyLimit(referralAddress, amount);
-
-        if (whitelist.getReferralTradeable(referralAddress)) {
-            mint(account, amount);
+    function mintFromDappOrReferral(address account, uint256 amount) public {
+        address executionAddress = _msgSender();
+        require(whitelist.isRegisteredDappOrReferral(executionAddress), "must be executed from whitelisted address");
+        if (whitelist.isRegisteredDapp(executionAddress)) {
+            whitelist.addToDappDailyLimit(executionAddress, amount);
         } else {
-            uint256 lockPeriod = whitelist.getReferralLockPeriod(referralAddress);
-            mintAndFreezeTo(account, amount, lockPeriod);
+            whitelist.addToReferralDailyLimit(executionAddress, amount);
+        }
+
+        if (whitelist.getDappTradeable(executionAddress)) {
+            _mintDirectly(account, amount);
+        } else {
+            uint256 lockPeriod = whitelist.getDappOrReferralLockPeriod(executionAddress);
+            _mintAndFreezeDirectly(account, amount, lockPeriod);
         }
     }
 
@@ -172,35 +159,26 @@ contract HXY is ERC20FreezableCapped, HexMoneyTeam {
         uint256 interestAmount = SafeMath.mul(SafeMath.div(frozenTokens, 1000), interestDays);
 
         refreeze(startDate, interestAmount);
+        totalFrozen = SafeMath.add(totalFrozen, interestAmount);
     }
 
     function releaseFrozen(uint256 _startDate) public {
-        require(!hasRole(TEAM_ROLE, _msgSender()), "Cannot be released from team account");
-        require(_msgSender() != lockedSupplyAddress, "Cannot be released from locked supply address");
-
         bytes32 freezeId = _toFreezeKey(_msgSender(), _startDate);
         Freezing memory userFreezing = freezings[freezeId];
 
         uint256 frozenTokens = userFreezing.freezeAmount;
-        uint256 interestDays = SafeMath.div(SafeMath.sub(block.timestamp, userFreezing.startDate), SECONDS_IN_DAY);
-        uint256 interestAmount = SafeMath.mul(SafeMath.div(frozenTokens, 1000), interestDays);
 
         release(_startDate);
-        _mint(_msgSender(), interestAmount);
 
+        if (!_isLockedAddress()) {
+            uint256 interestDays = SafeMath.div(SafeMath.sub(block.timestamp, userFreezing.startDate), SECONDS_IN_DAY);
+            uint256 interestAmount = SafeMath.mul(SafeMath.div(frozenTokens, 1000), interestDays);
+            _mint(_msgSender(), interestAmount);
 
-        totalFrozen = SafeMath.sub(totalFrozen, frozenTokens);
-        totalCirculating = SafeMath.add(totalCirculating, frozenTokens);
-        totalPayedInterest = SafeMath.add(totalPayedInterest, interestAmount);
-    }
-
-    function releaseFrozenTeam() public onlyTeamRole {
-        release(teamFreezeStart);
-    }
-
-    function releaseLockedSupply() public {
-        require(_msgSender() == lockedSupplyAddress, "Only for releasing locked supply");
-        release(lockedSupplyFreezingStarted);
+            totalFrozen = SafeMath.sub(totalFrozen, frozenTokens);
+            totalCirculating = SafeMath.add(totalCirculating, frozenTokens);
+            totalPayedInterest = SafeMath.add(totalPayedInterest, interestAmount);
+        }
     }
 
     function mint(address _to, uint256 _amount) internal {
@@ -211,32 +189,51 @@ contract HXY is ERC20FreezableCapped, HexMoneyTeam {
         _preprocessMintWithFreeze(_to, _amount, _lockDays);
     }
 
-    function _premintForTeam(address payable _teamAddress, uint256 _teamLockPeriod) internal {
-        require(_teamAddress != address(0x0), "team address cannot be zero");
-        require(_teamLockPeriod > 0, "team lock period cannot be zero");
-        _setupRole(TEAM_ROLE, _teamAddress);
-        teamAddress = _teamAddress;
-        teamLockPeriod = _teamLockPeriod;
-        mintAndFreeze(teamAddress, block.timestamp, _teamLockPeriod, teamSupply);
-    }
-
-    function _premintLiquidSupply(address _liqSupAddress) internal {
+    function _premintLiquidSupply(address _liqSupAddress, uint256 _liqSupAmount) internal {
         require(_liqSupAddress != address(0x0), "liquid supply address cannot be zero");
-        _mint(_liqSupAddress, liquidSupply);
+        require(_liqSupAmount != 0, "liquid supply amount cannot be zero");
+        liquidSupplyAddress = _liqSupAddress;
+        liquidSupply = _liqSupAmount;
+        _mint(_liqSupAddress, _liqSupAmount);
     }
 
-    function _premintLockedSupply(address _lockSupAddress) internal {
-        require(_lockSupAddress != address(0x0), "liquid supply address cannot be zero");
-        lockedSupplyAddress = _lockSupAddress;
-
-        mintAndFreeze(_lockSupAddress, block.timestamp, 365, lockedSupply);
-
-        lockedSupplyFreezingStarted = block.timestamp;
+    function premintLocked(address[6] memory _lockSupAddresses,  uint256[10] memory _unlockDates) public {
+        require(hasRole(DEPLOYER_ROLE, _msgSender()), "Must have deployer role");
+        require(!lockedSupplyPreminted, "cannot premint locked twice");
+        _premintLockedSupply(_lockSupAddresses, _unlockDates);
     }
 
-    function _premintMigratedSupply(address _migratedSupAddress) internal {
-        require(_migratedSupAddress != address(0x0), "migrated supply address cannot be zero");
-        _mint(_migratedSupAddress, migratedSupply);
+    function _premintLockedSupply(address[6] memory _lockSupAddresses, uint256[10] memory _unlockDates) internal {
+
+        lockedSupplyAddresses.firstAddress = _lockSupAddresses[0];
+        lockedSupplyAddresses.secondAddress = _lockSupAddresses[1];
+        lockedSupplyAddresses.thirdAddress = _lockSupAddresses[2];
+        lockedSupplyAddresses.fourthAddress = _lockSupAddresses[3];
+        lockedSupplyAddresses.fifthAddress = _lockSupAddresses[4];
+        lockedSupplyAddresses.sixthAddress = _lockSupAddresses[4];
+
+        for (uint256 i = 0; i < 10; i++) {
+            uint256 startDate = SafeMath.add(block.timestamp, SafeMath.add(i, 5));
+
+            uint256 endFreezeDate = _unlockDates[i];
+            uint256 lockSeconds = SafeMath.sub(endFreezeDate, startDate);
+            uint256 lockDays = SafeMath.div(lockSeconds, SECONDS_IN_DAY);
+
+
+            uint256 firstSecondAmount = SafeMath.mul(180000, 10 ** uint256(decimals()));
+            uint256 thirdAmount = SafeMath.mul(120000, 10 ** uint256(decimals()));
+            uint256 fourthAmount = SafeMath.mul(90000, 10 ** uint256(decimals()));
+            uint256 fifthSixthAmount = SafeMath.mul(15000, 10 ** uint256(decimals()));
+
+            mintAndFreeze(lockedSupplyAddresses.firstAddress, startDate, lockDays, firstSecondAmount);
+            mintAndFreeze(lockedSupplyAddresses.secondAddress, startDate, lockDays, firstSecondAmount);
+            mintAndFreeze(lockedSupplyAddresses.thirdAddress, startDate, lockDays, thirdAmount);
+            mintAndFreeze(lockedSupplyAddresses.fourthAddress, startDate, lockDays, fourthAmount);
+            mintAndFreeze(lockedSupplyAddresses.fifthAddress, startDate, lockDays, fifthSixthAmount);
+            mintAndFreeze(lockedSupplyAddresses.sixthAddress, startDate, lockDays, fifthSixthAmount);
+        }
+
+        lockedSupplyPreminted = true;
     }
 
 
@@ -327,6 +324,32 @@ contract HXY is ERC20FreezableCapped, HexMoneyTeam {
                 totalMinted = SafeMath.add(totalMinted, hxyInCurrentRound);
             }
             mintAndFreeze(_account, block.timestamp, _freezeDays, hxyAmount);
+        }
+    }
+
+    function _mintDirectly(address _account, uint256 _hxyAmount) internal {
+        _mint(_account, _hxyAmount);
+    }
+
+    function _mintAndFreezeDirectly(address _account, uint256 _hxyAmount, uint256 _freezeDays) internal {
+        mintAndFreeze(_account, block.timestamp, _freezeDays, _hxyAmount);
+    }
+
+    function _isLockedAddress() internal view returns (bool) {
+        if (_msgSender() == lockedSupplyAddresses.firstAddress) {
+            return true;
+        } else if (_msgSender() == lockedSupplyAddresses.secondAddress) {
+            return true;
+        } else if (_msgSender() == lockedSupplyAddresses.thirdAddress) {
+            return true;
+        } else if (_msgSender() == lockedSupplyAddresses.fourthAddress) {
+            return true;
+        } else if (_msgSender() == lockedSupplyAddresses.fifthAddress) {
+            return true;
+        } else if (_msgSender() == lockedSupplyAddresses.sixthAddress) {
+            return true;
+        } else {
+            return false;
         }
     }
 

@@ -10,15 +10,27 @@ contract HexMoneyExchangeUSDC is HexMoneyExchangeBase {
     address internal uniswapGetterInstanceEth;
     address internal uniswapGetterInstanceUsdc;
 
-    constructor (IERC20 _usdcToken, HXY _hxyToken, address payable _dividendsContract)
-    HexMoneyExchangeBase(_hxyToken, _dividendsContract)
-    public {
+    constructor (
+        HXY _hxyToken,
+        IERC20 _usdcToken,
+        address payable _dividendsContract,
+        address _uniswapEth,
+        address _uniswapUsdc,
+        address _adminAddress
+    )
+    public
+    HexMoneyExchangeBase(_hxyToken, _dividendsContract, _adminAddress)
+    {
         require(address(_usdcToken) != address(0x0), "erc20 token address should not be empty");
+        require(address(_uniswapEth) != address(0x0), "hex token address should not be empty");
+        require(address(_uniswapUsdc) != address(0x0), "hex token address should not be empty");
         usdcToken = _usdcToken;
 
-        decimals = 10 ** 18;
-        minAmount = SafeMath.mul(10 ** 3, decimals);
-        maxAmount = SafeMath.mul(10 ** 9, decimals);
+        uniswapGetterInstanceEth = _uniswapEth;
+        uniswapGetterInstanceUsdc = _uniswapUsdc;
+        decimals = 10 ** 8;
+        minAmount = 10 ** 5;
+        maxAmount = SafeMath.mul(10 ** 6, decimals);
     }
 
     function getUniswapGetterInstanceEth() public view returns (address) {
@@ -46,21 +58,16 @@ contract HexMoneyExchangeUSDC is HexMoneyExchangeBase {
         uint256 hexAmount = IUniswapExchangeAmountGetters(uniswapGetterInstanceEth).getEthToTokenInputPrice(ethAmount);
         _validateAmount(amount);
 
-        HXY(hxyToken).mintFromDapp(_msgSender(), hexAmount);
+        HXY(hxyToken).mintFromExchange(_msgSender(), hexAmount);
         _addToDividends(amount);
     }
 
-    function setUniswapGetterInstanceEth(address _uniswapGetterInstanceEth)  public onlyAdminRole {
+    function setUniswapGetterInstanceEth(address _uniswapGetterInstanceEth)  public onlyAdminOrDeployerRole {
         uniswapGetterInstanceEth = _uniswapGetterInstanceEth;
     }
 
-    function setUniswapGetterInstanceUsdc(address _uniswapGetterInstanceUsdc)  public onlyAdminRole {
+    function setUniswapGetterInstanceUsdc(address _uniswapGetterInstanceUsdc)  public onlyAdminOrDeployerRole {
         uniswapGetterInstanceUsdc = _uniswapGetterInstanceUsdc;
-    }
-
-    function setUsdcToken(address newUsdcToken) public onlyAdminRole {
-        require(newUsdcToken != address(0x0), "Invalid USDC token address");
-        usdcToken = IERC20(newUsdcToken);
     }
 
     function _addToDividends(uint256 _amount) internal override {

@@ -9,19 +9,22 @@ contract HexMoneyExchangeETH is HexMoneyExchangeBase {
     address internal uniswapGetterInstance;
 
 
-    constructor (HXY _hxyToken, address payable _dividendsContract)
-    HexMoneyExchangeBase(_hxyToken, _dividendsContract)
-    public {
+    constructor (HXY _hxyToken, address payable _dividendsContract, address _uniswapEth, address _adminAddress)
+    public
+    HexMoneyExchangeBase(_hxyToken, _dividendsContract, _adminAddress)
+    {
+        require(address(_uniswapEth) != address(0x0), "hex token address should not be empty");
+        uniswapGetterInstance = _uniswapEth;
         decimals = 10 ** 18;
         minAmount = 10 ** 14;
-        maxAmount = SafeMath.mul(10 ** 5, decimals);
+        maxAmount = SafeMath.mul(10 ** 4, decimals);
     }
 
     function getUniswapGetterInstance() public view returns (address) {
         return uniswapGetterInstance;
     }
 
-    function setUniswapGetterInstance(address newUniswapGetterInstance)  public onlyAdminRole {
+    function setUniswapGetterInstance(address newUniswapGetterInstance)  public onlyAdminOrDeployerRole {
         uniswapGetterInstance = newUniswapGetterInstance;
     }
 
@@ -31,20 +34,19 @@ contract HexMoneyExchangeETH is HexMoneyExchangeBase {
 
         // Assets Transfers
     receive() external payable {
-        require(msg.value > 0, "cannot be zero payment");
-        _validateAmount(msg.value);
-        uint256 hexAmount = IUniswapExchangeAmountGetters(uniswapGetterInstance).getEthToTokenInputPrice(msg.value);
-
-        HXY(hxyToken).mintFromDapp(_msgSender(), hexAmount);
-        _addToDividends(msg.value);
+        _exchangeEth(msg.value);
     }
 
     function exchangeEth() public payable {
-        require(msg.value > 0, "cannot be zero payment");
-        uint256 hexAmount = IUniswapExchangeAmountGetters(uniswapGetterInstance).getEthToTokenInputPrice(msg.value);
+        _exchangeEth(msg.value);
+    }
 
-        HXY(hxyToken).mintFromDapp(_msgSender(), hexAmount);
-        _addToDividends(msg.value);
+    function _exchangeEth(uint256 _amount) internal {
+        _validateAmount(_amount);
+        uint256 hexAmount = IUniswapExchangeAmountGetters(uniswapGetterInstance).getEthToTokenInputPrice(_amount);
+
+        HXY(hxyToken).mintFromExchange(_msgSender(), hexAmount);
+        _addToDividends(_amount);
     }
 
     function _addToDividends(uint256 _amount) internal override {
