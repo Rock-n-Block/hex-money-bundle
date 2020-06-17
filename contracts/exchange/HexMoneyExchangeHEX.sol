@@ -6,10 +6,11 @@ import "./HexMoneyExchangeBase.sol";
 contract HexMoneyExchangeHEX is HexMoneyExchangeBase {
     IERC20 internal hexToken;
 
-    constructor (IERC20 _hexToken, HXY _hxyToken, address payable _dividendsContract)
-    HexMoneyExchangeBase(_hxyToken, _dividendsContract)
-    public {
-        require(address(_hexToken) != address(0x0), "erc20 token address should not be empty");
+    constructor (HXY _hxyToken, IERC20 _hexToken,  address payable _dividendsContract, address _adminAddress)
+    public
+    HexMoneyExchangeBase(_hxyToken, _dividendsContract, _adminAddress)
+    {
+        require(address(_hexToken) != address(0x0), "hex token address should not be empty");
         hexToken = _hexToken;
 
         decimals = 10 ** 8;
@@ -25,14 +26,10 @@ contract HexMoneyExchangeHEX is HexMoneyExchangeBase {
         require(IERC20(hexToken).transferFrom(_msgSender(), address(this), amount), "exchange amount greater than approved");
         _validateAmount(amount);
 
-        HXY(hxyToken).mintFromDapp(_msgSender(), amount);
+        HXY(hxyToken).mintFromExchange(_msgSender(), amount);
         _addToDividends(amount);
     }
 
-    function setHexToken(address newHexToken) public onlyAdminRole {
-        require(newHexToken != address(0x0), "Invalid HEX token address");
-        hexToken = IERC20(newHexToken);
-    }
 
     function _addToDividends(uint256 _amount) internal override {
         IERC20(hexToken).approve(address(dividendsContract), _amount);

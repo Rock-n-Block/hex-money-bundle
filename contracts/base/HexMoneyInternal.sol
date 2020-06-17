@@ -6,26 +6,22 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "../whitelist/HexWhitelist.sol";
 
 contract HexMoneyInternal is AccessControl, ReentrancyGuard  {
+    bytes32 public constant DEPLOYER_ROLE = keccak256("DEPLOYER_ROLE");
+
     // production
     uint256 public constant SECONDS_IN_DAY = 86400;
 
-    // dev-test
-    // uint256 public constant SECONDS_IN_DAY = 300;
-
     HexWhitelist internal whitelist;
 
-    modifier onlyAdminRole() {
-        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Must have admin role");
+    modifier onlyAdminOrDeployerRole() {
+        bool hasAdminRole = hasRole(DEFAULT_ADMIN_ROLE, _msgSender());
+        bool hasDeployerRole = hasRole(DEPLOYER_ROLE, _msgSender());
+        require(hasAdminRole || hasDeployerRole, "Must have admin or deployer role");
         _;
     }
 
     function getWhitelistAddress() public view returns (address) {
         return address(whitelist);
-    }
-
-    function setWhitelistAddress(address newWhitelistAddress) public onlyAdminRole {
-        require(newWhitelistAddress != address(0x0), "Invalid whitelist address");
-        whitelist = HexWhitelist(newWhitelistAddress);
     }
 
 }

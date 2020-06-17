@@ -115,6 +115,7 @@ contract ERC20 is Context, IERC20 {
      * - the caller must have a balance of at least `amount`.
      */
     function transfer(address recipient, uint256 amount) public virtual override returns (bool) {
+        require(recipient != address(this), "ERC20: Cannot transfer to self");
         _transfer(_msgSender(), recipient, amount);
         return true;
     }
