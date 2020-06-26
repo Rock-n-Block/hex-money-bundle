@@ -126,7 +126,6 @@ contract('exchange', accounts => {
             );
         referralSander = await HEXExchangeReferral.new(hxyToken.address, hexWhitelist.address, OWNER);
         await hexWhitelist.registerDappNonTradeable(referralSander.address, eth.toString(),30,  {from: OWNER}).should.not.be.rejected;
-        (await hexWhitelist.isRegisteredDappOrReferral(referralSander.address)).should.be.true;
         (await hexWhitelist.isRegisteredDapp(referralSander.address)).should.be.true;
         (await hexWhitelist.getDappTradeable(referralSander.address)).should.be.false;
 
@@ -772,6 +771,9 @@ contract('exchange', accounts => {
         refPercentChanged.should.not.be.bignumber.equals(refPercent);
         refPercentChanged.should.be.bignumber.equals(new BN(10));
 
+        const totalFrozenBefore = await hxyToken.getTotalFrozen();
+        console.log(totalFrozenBefore.toString());
+
         hxyBalanceReferralChangedBefore = await hxyToken.balanceOf(BUYER_2);
         await hexToken.approve(hexExchangeHEX.address, hexAmount, {from: BUYER_1});
         await hexExchangeHEX.exchangeHexWithReferral(hexAmount.toString(), BUYER_2, {from: BUYER_1}).should.not.be.rejected;
@@ -780,6 +782,9 @@ contract('exchange', accounts => {
 
         const expectedAmountChanged = hxyAmount.mul(refPercent).div(new BN(100));
         hxyBalanceReferralAfter.should.be.bignumber.equals(expectedAmountChanged);
+
+        const totalFrozen = await hxyToken.getTotalFrozen();
+        totalFrozen.should.be.bignumber.above(totalFrozenBefore);
     })
 
 });

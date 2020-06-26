@@ -58,6 +58,10 @@ abstract contract HexMoneyExchangeBase is HexMoneyInternal {
         referralSender = HexMoneyReferralSender(_referralSender);
     }
 
+    function disableReferralSenderContract() public onlyAdminOrDeployerRole {
+        referralSender = HexMoneyReferralSender(0x0);
+    }
+
     function _addToDividends(uint256 _amount) internal virtual {
     }
 
@@ -67,6 +71,7 @@ abstract contract HexMoneyExchangeBase is HexMoneyInternal {
     }
 
     function _mintToReferral(address referralAddress, uint256 hexAmount) internal {
+        HXY(hxyToken).mintFromExchange(address(referralSender), hexAmount);
         HexMoneyReferralSender(referralSender).mintToReferral(referralAddress, hexAmount);
    }
 }

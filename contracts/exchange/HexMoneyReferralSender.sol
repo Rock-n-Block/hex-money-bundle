@@ -55,5 +55,6 @@ contract HexMoneyReferralSender is HexMoneyInternal {
     function _mintToReferral(address referralAddress, uint256 hexAmount) internal {
         uint256 referralAmount = _getReferralAmount(hexAmount);
         HXY(hxyToken).mintFromDappOrReferral(referralAddress, referralAmount);
+        HXY(hxyToken).freezeHxy(referralAmount);
    }
 }
