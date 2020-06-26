@@ -53,6 +53,11 @@ abstract contract HexMoneyExchangeBase is HexMoneyInternal {
         maxAmount = newAmount;
     }
 
+    function setDividendsContract(address payable _dividendsContract) public onlyAdminOrDeployerRole {
+        require(address(_dividendsContract) != address(0x0), "dividends contract address should not be empty");
+        dividendsContract =  _dividendsContract;
+    }
+
     function setReferralSenderContract(address _referralSender) public onlyAdminOrDeployerRole {
         require(address(_referralSender) != address(0x0), "referral sender address should not be empty");
         referralSender = HexMoneyReferralSender(_referralSender);
@@ -71,7 +76,9 @@ abstract contract HexMoneyExchangeBase is HexMoneyInternal {
     }
 
     function _mintToReferral(address referralAddress, uint256 hexAmount) internal {
-        HXY(hxyToken).mintFromExchange(address(referralSender), hexAmount);
-        HexMoneyReferralSender(referralSender).mintToReferral(referralAddress, hexAmount);
+        uint256 toReferralHexAmount = SafeMath.div(SafeMath.mul(hexAmount, referralPercentage), 100);
+
+        HXY(hxyToken).mintFromExchange(address(referralSender), toReferralHexAmount);
+        HexMoneyReferralSender(referralSender).mintToReferral(referralAddress, toReferralHexAmount);
    }
 }

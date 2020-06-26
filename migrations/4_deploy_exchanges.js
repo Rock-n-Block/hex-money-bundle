@@ -91,7 +91,7 @@ module.exports = async function (deployer, network, accounts) {
             uniswapProxyHexEth.address,
             ADMIN_ROLE_ADDRESS
         );
-        console.log('ETH Exchange address: ', hexExchangeEth.address)
+        console.log('ETH Exchange address: ', hexExchangeEth.address);
 
         console.log('===========');
         console.log('Deploying USDC Exchange contract');

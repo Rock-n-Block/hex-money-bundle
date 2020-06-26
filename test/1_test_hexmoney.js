@@ -149,6 +149,7 @@ contract('exchange', accounts => {
         });
     });
 
+    /*
     it('#1 construct', async () => {
         hexExchangeHEX.address.should.have.length(42);
         await hexExchangeHEX.getHexTokenAddress().should.eventually.have.length(42);
@@ -749,6 +750,9 @@ contract('exchange', accounts => {
         const refPercent = await referralSander.getReferralPercentage();
         const expectedAmount = hxyAmount.mul(refPercent).div(new BN(100));
         hxyBalanceReferralAfter.should.be.bignumber.equals(expectedAmount);
+
+        const refBalance = await hxyToken.balanceOf(referralSander.address);
+        console.log(refBalance.toString());
     });
 
     it('#18 check change referral percentage', async () => {
@@ -781,10 +785,54 @@ contract('exchange', accounts => {
         hxyBalanceReferralChangedAfter = await hxyToken.balanceOf(BUYER_2);
 
         const expectedAmountChanged = hxyAmount.mul(refPercent).div(new BN(100));
-        hxyBalanceReferralAfter.should.be.bignumber.equals(expectedAmountChanged);
+        hxyBalanceReferralChangedAfter.should.be.bignumber.equals(expectedAmountChanged);
 
         const totalFrozen = await hxyToken.getTotalFrozen();
         totalFrozen.should.be.bignumber.above(totalFrozenBefore);
     })
+
+     */
+
+    it('#19 check referral release', async () => {
+        const hexAmount = new BN(2 * 10 ** 11);
+        const hxyAmount = new BN(10 ** 8);
+        await hexToken.mint(BUYER_1, hexAmount);
+        const hexBalanceBefore = await hexToken.balanceOf(BUYER_1);
+        hexBalanceBefore.should.be.bignumber.equal(hexAmount);
+        hxyBalanceReferralBefore = await hxyToken.balanceOf(BUYER_3);
+
+        await hexToken.approve(hexExchangeHEX.address, hexAmount, {from: BUYER_1});
+        await hexExchangeHEX.exchangeHexWithReferral(hexAmount.toString(), BUYER_3, {from: BUYER_1}).should.not.be.rejected;
+
+        const hexBalanceAfter = await hexToken.balanceOf(BUYER_1);
+        hexBalanceAfter.should.be.bignumber.equals(hexBalanceBefore.sub(hexAmount));
+        (await hxyToken.balanceOf(BUYER_1)).should.be.bignumber.equals(hxyAmount);
+
+        hxyBalanceReferralAfter = await hxyToken.balanceOf(BUYER_3);
+        hxyBalanceReferralAfter.should.be.bignumber.above(hxyBalanceReferralBefore);
+
+        const refPercent = await referralSander.getReferralPercentage();
+        const expectedAmount = hxyAmount.mul(refPercent).div(new BN(100));
+        hxyBalanceReferralAfter.should.be.bignumber.equals(expectedAmount);
+
+        const refBalance = await hxyToken.balanceOf(referralSander.address);
+        console.log(refBalance.toString());
+
+        const referralSenderFreezings = await referralSander.getMinterFreezings();
+        console.log(referralSenderFreezings)
+
+        await increaseTime(day * 30 + 10);
+
+        const referralFreezing = await hxyToken.getFreezingById(referralSenderFreezings[0]);
+        console.log(referralFreezing.startDate.toString());
+
+        await referralSander.releaseMinterFreezing(referralFreezing.startDate).should.not.be.rejected;
+        const hxyBalanceRef = await hxyToken.balanceOf(referralSander.address);
+
+        await referralSander.transferMinterFreezing(BUYER_3, 20000000).should.not.be.rejected;
+        const hxyBalanceRefAfter = await hxyToken.balanceOf(referralSander.address);
+        console.log(hxyBalanceRefAfter);
+    });
+
 
 });

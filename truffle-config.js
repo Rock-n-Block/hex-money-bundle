@@ -93,7 +93,7 @@ module.exports = {
           INFURA_KOVAN,
         ),
       network_id: 42, // Kovan's id
-      gas: 7900000, // Ropsten has a lower block limit than mainnet
+      gas: 4900000, // Ropsten has a lower block limit than mainnet
       gasPrice: 38000000000,  // 20 gwei (in wei) (default: 100 gwei)
       confirmations: 2, // # of confs to wait between deployments. (default: 0)
       timeoutBlocks: 200, // # of blocks before a deployment times out  (minimum/default: 50)

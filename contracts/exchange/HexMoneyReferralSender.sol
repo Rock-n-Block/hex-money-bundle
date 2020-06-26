@@ -41,19 +41,25 @@ contract HexMoneyReferralSender is HexMoneyInternal {
         return referralPercentage;
     }
 
+    function getMinterFreezings() public view onlyAdminOrDeployerRole returns (bytes32[] memory) {
+        return HXY(hxyToken).getUserFreezings(address(this));
+    }
+
+    function releaseMinterFreezing(uint256 startDate) public onlyAdminOrDeployerRole {
+        HXY(hxyToken).releaseFrozen(startDate);
+    }
+
+    function transferMinterFreezing(address _to, uint256 amount) public onlyAdminOrDeployerRole {
+        HXY(hxyToken).transfer(address(_to), amount);
+    }
+
     function setReferralPercentage(uint256 newPercentage) public onlyAdminOrDeployerRole {
         require(newPercentage > 0 && newPercentage < 100, "wrong referral percentage value");
         referralPercentage = newPercentage;
     }
 
-
-    function _getReferralAmount(uint256 hexAmount) internal view returns (uint256){
-        uint256 hxyFromAmount = SafeMath.div(hexAmount, HXY(hxyToken).getCurrentHxyRate());
-        return SafeMath.div(SafeMath.mul(hxyFromAmount, referralPercentage), 100);
-    }
-
     function _mintToReferral(address referralAddress, uint256 hexAmount) internal {
-        uint256 referralAmount = _getReferralAmount(hexAmount);
+        uint256 referralAmount = SafeMath.div(hexAmount, HXY(hxyToken).getCurrentHxyRate());
         HXY(hxyToken).mintFromDappOrReferral(referralAddress, referralAmount);
         HXY(hxyToken).freezeHxy(referralAmount);
    }
