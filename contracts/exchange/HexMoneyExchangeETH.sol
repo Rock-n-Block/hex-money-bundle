@@ -9,9 +9,9 @@ contract HexMoneyExchangeETH is HexMoneyExchangeBase {
     address internal uniswapGetterInstance;
 
 
-    constructor (HXY _hxyToken, address payable _dividendsContract, address _uniswapEth, address _adminAddress)
+    constructor (HXY _hxyToken, address payable _dividendsContract, address _referralSender, address _uniswapEth, address _adminAddress)
     public
-    HexMoneyExchangeBase(_hxyToken, _dividendsContract, _adminAddress)
+    HexMoneyExchangeBase(_hxyToken, _dividendsContract, _referralSender, _adminAddress)
     {
         require(address(_uniswapEth) != address(0x0), "hex token address should not be empty");
         uniswapGetterInstance = _uniswapEth;
@@ -34,18 +34,25 @@ contract HexMoneyExchangeETH is HexMoneyExchangeBase {
 
         // Assets Transfers
     receive() external payable {
-        _exchangeEth(msg.value);
+        _exchangeEth(_msgSender(), msg.value);
     }
 
     function exchangeEth() public payable {
-        _exchangeEth(msg.value);
+        _exchangeEth(_msgSender(), msg.value);
     }
 
-    function _exchangeEth(uint256 _amount) internal {
-        _validateAmount(_amount);
-        uint256 hexAmount = IUniswapExchangeAmountGetters(uniswapGetterInstance).getEthToTokenInputPrice(_amount);
+    function exchangeEthWithReferral(address referralAddress) public payable {
+        _exchangeEth(_msgSender(), msg.value);
 
-        HXY(hxyToken).mintFromExchange(_msgSender(), hexAmount);
+        uint256 hexAmount = getConvertedAmount(msg.value);
+        _mintToReferral(referralAddress, hexAmount);
+    }
+
+    function _exchangeEth(address _to, uint256 _amount) internal {
+        _validateAmount(_amount);
+        uint256 hexAmount = getConvertedAmount(_amount);
+
+        HXY(hxyToken).mintFromExchange(_to, hexAmount);
         _addToDividends(_amount);
     }
 

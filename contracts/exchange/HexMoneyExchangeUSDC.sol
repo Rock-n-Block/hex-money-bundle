@@ -14,12 +14,13 @@ contract HexMoneyExchangeUSDC is HexMoneyExchangeBase {
         HXY _hxyToken,
         IERC20 _usdcToken,
         address payable _dividendsContract,
+        address _referralSender,
         address _uniswapEth,
         address _uniswapUsdc,
         address _adminAddress
     )
     public
-    HexMoneyExchangeBase(_hxyToken, _dividendsContract, _adminAddress)
+    HexMoneyExchangeBase(_hxyToken, _dividendsContract, _referralSender, _adminAddress)
     {
         require(address(_usdcToken) != address(0x0), "erc20 token address should not be empty");
         require(address(_uniswapEth) != address(0x0), "hex token address should not be empty");
@@ -53,12 +54,22 @@ contract HexMoneyExchangeUSDC is HexMoneyExchangeBase {
     }
 
     function exchangeUsdc(uint256 amount) public {
-        require(IERC20(usdcToken).transferFrom(_msgSender(), address(this), amount), "exchange amount greater than approved");
-        uint256 ethAmount = IUniswapExchangeAmountGetters(uniswapGetterInstanceUsdc).getTokenToEthInputPrice(amount);
-        uint256 hexAmount = IUniswapExchangeAmountGetters(uniswapGetterInstanceEth).getEthToTokenInputPrice(ethAmount);
+        _exchangeUsdc(_msgSender(), amount);
+    }
+
+    function exchangeUsdcWithReferral(uint256 amount, address referralAddress) public {
+        _exchangeUsdc(_msgSender(), amount);
+
+        uint256 hexAmount = getConvertedAmount(amount);
+        _mintToReferral(referralAddress, hexAmount);
+    }
+
+    function _exchangeUsdc(address _to, uint256 amount) internal {
+        require(IERC20(usdcToken).transferFrom(_to, address(this), amount), "exchange amount greater than approved");
         _validateAmount(amount);
 
-        HXY(hxyToken).mintFromExchange(_msgSender(), hexAmount);
+        uint256 hexAmount = getConvertedAmount(amount);
+        HXY(hxyToken).mintFromExchange(_to, hexAmount);
         _addToDividends(amount);
     }
 

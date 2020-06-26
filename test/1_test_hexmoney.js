@@ -24,6 +24,7 @@ const HEXWhitelist = artifacts.require("./whitelist/HexWhitelist.sol")
 const HEXDividends = artifacts.require('./HexMoneyDividends.sol');
 const HEXExchangeHEX = artifacts.require('./exchange/HexMoneyExchangeHEX.sol');
 const HEXExchangeETH = artifacts.require('./exchange/HexMoneyExchangeETH.sol');
+const HEXExchangeReferral = artifacts.require('./exchange/HexMoneyReferralSender.sol');
 
 const UniswapV1 = artifacts.require('UniswapV1');
 const UniswapExchangeAmountGettersV1 = artifacts.require('UniswapExchangeAmountGettersV1',);
@@ -123,7 +124,13 @@ contract('exchange', accounts => {
             HXY_DIVIDENDS_TEAM_THIRD,
             currentTime.add(new BN(day))
             );
-        hexExchangeHEX = await HEXExchangeHEX.new(hxyToken.address, hexToken.address, hexDividends.address, OWNER);
+        referralSander = await HEXExchangeReferral.new(hxyToken.address, hexWhitelist.address, OWNER);
+        await hexWhitelist.registerDappNonTradeable(referralSander.address, eth.toString(),30,  {from: OWNER}).should.not.be.rejected;
+        (await hexWhitelist.isRegisteredDappOrReferral(referralSander.address)).should.be.true;
+        (await hexWhitelist.isRegisteredDapp(referralSander.address)).should.be.true;
+        (await hexWhitelist.getDappTradeable(referralSander.address)).should.be.false;
+
+        hexExchangeHEX = await HEXExchangeHEX.new(hxyToken.address, hexToken.address, hexDividends.address, referralSander.address, OWNER);
         await hexWhitelist.registerExchangeTradeable(hexExchangeHEX.address, eth.toString(), {from: OWNER}).should.not.be.rejected;
         (await hexWhitelist.isRegisteredExchange(hexExchangeHEX.address)).should.be.true;
         (await hexWhitelist.getExchangeTradeable(hexExchangeHEX.address)).should.be.true;
@@ -180,7 +187,7 @@ contract('exchange', accounts => {
         const uniswapProxy = await UniswapExchangeAmountGettersV1.new(uniswapV1.address);
 
 
-        hexExchangeETH = await HEXExchangeETH.new(hxyToken.address, hexDividends.address, uniswapProxy.address, OWNER);
+        hexExchangeETH = await HEXExchangeETH.new(hxyToken.address, hexDividends.address, referralSander.address, uniswapProxy.address, OWNER);
         (await hxyToken.getWhitelistAddress()).should.be.equals(hexWhitelist.address);
         await hexWhitelist.registerExchangeTradeable(hexExchangeETH.address, eth.toString(), {from: OWNER}).should.not.be.rejected;
         (await hexWhitelist.isRegisteredExchange(hexExchangeETH.address)).should.be.true;
@@ -720,6 +727,59 @@ contract('exchange', accounts => {
         const afterCapitalizeFreezing = await hxyToken.getFreezingById(newFreezeId);
         afterCapitalizeFreezing.freezeAmount.should.be.bignumber.zero;
 
+    })
+
+    it('#17 check buy with referral', async () => {
+        const hexAmount = new BN(2 * 10 ** 11);
+        const hxyAmount = new BN(10 ** 8);
+        await hexToken.mint(BUYER_1, hexAmount);
+        const hexBalanceBefore = await hexToken.balanceOf(BUYER_1);
+        hexBalanceBefore.should.be.bignumber.equal(hexAmount);
+        hxyBalanceReferralBefore = await hxyToken.balanceOf(BUYER_3);
+
+        await hexToken.approve(hexExchangeHEX.address, hexAmount, {from: BUYER_1});
+        await hexExchangeHEX.exchangeHexWithReferral(hexAmount.toString(), BUYER_3, {from: BUYER_1}).should.not.be.rejected;
+
+        const hexBalanceAfter = await hexToken.balanceOf(BUYER_1);
+        hexBalanceAfter.should.be.bignumber.equals(hexBalanceBefore.sub(hexAmount));
+        (await hxyToken.balanceOf(BUYER_1)).should.be.bignumber.equals(hxyAmount);
+
+        hxyBalanceReferralAfter = await hxyToken.balanceOf(BUYER_3);
+        hxyBalanceReferralAfter.should.be.bignumber.above(hxyBalanceReferralBefore)
+
+        const refPercent = await referralSander.getReferralPercentage();
+        const expectedAmount = hxyAmount.mul(refPercent).div(new BN(100));
+        hxyBalanceReferralAfter.should.be.bignumber.equals(expectedAmount);
+    });
+
+    it('#18 check change referral percentage', async () => {
+        const hexAmount = new BN(2 * 10 ** 11);
+        const hxyAmount = new BN(10 ** 8);
+        await hexToken.mint(BUYER_1, hexAmount);
+        const hexBalanceBefore = await hexToken.balanceOf(BUYER_1);
+        hexBalanceBefore.should.be.bignumber.equal(hexAmount);
+        hxyBalanceReferralBefore = await hxyToken.balanceOf(BUYER_3);
+
+        const refPercent = await referralSander.getReferralPercentage();
+        const expectedAmount = hxyAmount.mul(refPercent).div(new BN(100));
+        hxyBalanceReferralAfter.should.be.bignumber.equals(expectedAmount);
+
+        await referralSander.setReferralPercentage(10, {from: BUYER_1}).should.be.rejected;
+        await referralSander.setReferralPercentage(1000, {from: OWNER}).should.be.rejected;
+        await referralSander.setReferralPercentage(10, {from: OWNER}).should.not.be.rejected;
+
+        const refPercentChanged = await referralSander.getReferralPercentage();
+        refPercentChanged.should.not.be.bignumber.equals(refPercent);
+        refPercentChanged.should.be.bignumber.equals(new BN(10));
+
+        hxyBalanceReferralChangedBefore = await hxyToken.balanceOf(BUYER_2);
+        await hexToken.approve(hexExchangeHEX.address, hexAmount, {from: BUYER_1});
+        await hexExchangeHEX.exchangeHexWithReferral(hexAmount.toString(), BUYER_2, {from: BUYER_1}).should.not.be.rejected;
+
+        hxyBalanceReferralChangedAfter = await hxyToken.balanceOf(BUYER_2);
+
+        const expectedAmountChanged = hxyAmount.mul(refPercent).div(new BN(100));
+        hxyBalanceReferralAfter.should.be.bignumber.equals(expectedAmountChanged);
     })
 
 });

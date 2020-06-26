@@ -19,7 +19,7 @@
  */
 
 const HDWalletProvider = require('@truffle/hdwallet-provider');
-require('dotenv').config({ path: '../.env' })
+require('dotenv').config({ path: '.env' })
 
 const {
   DEPLOYER_MNEMONIC,
@@ -27,7 +27,7 @@ const {
   INFURA_KOVAN,
   INFURA_ROPSTEN,
   INFURA_MAINNET
-} = process.env
+} = process.env;
 
 const ganache = require('ganache-core');
 const BN = require('bn.js');
@@ -117,13 +117,13 @@ module.exports = {
       provider: ganache.provider({
           total_accounts: 15, // eslint-disable-line camelcase
           default_balance_ether: new BN(1e+5), // eslint-disable-line camelcase
-          DEPLOYER_MNEMONIC: 'mywish',
+          mnemonic: 'mywish',
           time: new Date('2020-04-21T12:00:00Z'),
           debug: false,
-          gasLimit: 8500000,
+	  gasLimit: 9000000,
           // ,logger: console
       }),
-      //gas: 9000000, // gas block limit
+      gas: 8500000, // gas block limit
     },
     // Useful for private networks
     // private: {
