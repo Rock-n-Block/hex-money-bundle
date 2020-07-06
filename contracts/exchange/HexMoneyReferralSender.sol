@@ -41,9 +41,9 @@ contract HexMoneyReferralSender is HexMoneyInternal {
         return referralPercentage;
     }
 
-    function getMinterFreezings() public view onlyAdminOrDeployerRole returns (bytes32[] memory) {
-        return HXY(hxyToken).getUserFreezings(address(this));
-    }
+    // function getMinterFreezings() public view onlyAdminOrDeployerRole returns (bytes32[] memory) {
+    //     return HXY(hxyToken).getUserFreezings(address(this));
+    // }
 
     function releaseMinterFreezing(uint256 startDate) public onlyAdminOrDeployerRole {
         HXY(hxyToken).releaseFrozen(startDate);

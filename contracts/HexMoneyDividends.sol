@@ -168,10 +168,10 @@ contract HexMoneyDividends is HexMoneyInternal {
         return address(usdcToken);
     }
 
-    receive() external payable {
-        updateAndSendDividends();
-        ethDividends.todayReceived = SafeMath.add(ethDividends.todayReceived, msg.value);
-    }
+//    receive() external payable {
+//        updateAndSendDividends();
+//        ethDividends.todayReceived = SafeMath.add(ethDividends.todayReceived, msg.value);
+//    }
 
     function recordDividendsETH() external payable nonReentrant {
         require(msg.value != 0, "value must be supplied in call to record dividends");
@@ -193,24 +193,62 @@ contract HexMoneyDividends is HexMoneyInternal {
         _recordDividendsErc20(address(usdcToken), usdcDividends, amount);
     }
 
+//    function claimDividends() external nonReentrant {
+//        updateAndSendDividends();
+//
+//        uint256 userFrozenBalance = HXY(hxyToken).freezingBalanceOf(_msgSender());
+//        uint256 userLastFreeze = HXY(hxyToken).latestFreezeTimeOf(_msgSender());
+//        require(userFrozenBalance != 0, "must be freezed amount of HXY to claim dividends");
+//        uint256 timeOfPrevDay = SafeMath.sub(dividendsRecordTime, (SafeMath.mul(1, SECONDS_IN_DAY)));
+//        require(userLastFreeze < timeOfPrevDay, "cannot claim if freezed today");
+//        require(userClaimedLastTime[_msgSender()] < timeOfPrevDay, "tokens already claimed today");
+//
+//        processClaimHex(userFrozenBalance);
+//        processClaimHxy(userFrozenBalance);
+//        processClaimUsdc(userFrozenBalance);
+//        processClaimEth(userFrozenBalance);
+//
+//        userClaimedLastTime[_msgSender()] = block.timestamp;
+//    }
 
     function claimDividends() external nonReentrant {
-        updateAndSendDividends();
+        _claimDividendsTo(_msgSender());
+    }
 
-        uint256 userFrozenBalance = HXY(hxyToken).freezingBalanceOf(_msgSender());
-        uint256 userLastFreeze = HXY(hxyToken).latestFreezeTimeOf(_msgSender());
+    function claimDividendsTo(address payable account) external nonReentrant {
+        _claimDividendsTo(account);
+    }
+
+//    function claimDividendsToBatch(address[]   accounts) external nonReentrant {
+//        for (uint256 i; i < accounts.length; i++) {
+//            _claimDividendsTo(accounts[i]);
+//        }
+//    }
+
+    // function _getUserFreezingAmount(address account) internal {
+    //     bytes32[] memory userFreezings = HXY(hxyToken).getUserFreezings(account);
+    //     //while
+    //     (address user, uint256 startDate, uint256 freezeDays, uint256 freezeAmount, bool capitalized) = HXY(hxyToken).getFreezingById(userFreezings[0]);
+    // }
+
+    function _claimDividendsTo(address payable account) internal {
+        updateAndSendDividends();
+        require(account != address(0x0), "cannot claim for zero address");
+
+        uint256 userFrozenBalance = HXY(hxyToken).freezingBalanceOf(account);
+        uint256 userLastFreeze = HXY(hxyToken).latestFreezeTimeOf(account);
         require(userFrozenBalance != 0, "must be freezed amount of HXY to claim dividends");
         uint256 timeOfPrevDay = SafeMath.sub(dividendsRecordTime, (SafeMath.mul(1, SECONDS_IN_DAY)));
         require(userLastFreeze < timeOfPrevDay, "cannot claim if freezed today");
-        require(userClaimedLastTime[_msgSender()] < timeOfPrevDay, "tokens already claimed today");
+        require(userClaimedLastTime[account] < timeOfPrevDay, "tokens already claimed today");
+        // _getUserFreezingAmount(account);
 
-        processClaimHex(userFrozenBalance);
-        processClaimHxy(userFrozenBalance);
-        processClaimUsdc(userFrozenBalance);
-        processClaimEth(userFrozenBalance);
+        processClaimHex(account, userFrozenBalance);
+        processClaimHxy(account, userFrozenBalance);
+        processClaimUsdc(account, userFrozenBalance);
+        processClaimEth(account, userFrozenBalance);
 
         userClaimedLastTime[_msgSender()] = block.timestamp;
-
     }
 
     function _setInitialRecordTime(uint256 _recordTime) internal {
@@ -229,36 +267,36 @@ contract HexMoneyDividends is HexMoneyInternal {
         return SafeMath.div(SafeMath.mul(todayForClaim, userFrozen), totalFrozenHxyToday);
     }
 
-    function processClaimEth(uint256 userFrozen) internal {
+    function processClaimEth(address payable _to, uint256 userFrozen) internal {
         if (ethDividends.todayForClaim > 0) {
 
             //uint256 amount = SafeMath.div(SafeMath.mul(ethDividends.todayForClaim, userFrozen), totalFrozenHxyToday);
             uint256 amount = getClaimAmount(ethDividends.todayForClaim, userFrozen);
-            _msgSender().transfer(amount);
+            _to.transfer(amount);
             ethDividends.todayClaimed = SafeMath.add(ethDividends.todayClaimed, amount);
         }
     }
 
-    function _processClaimErc20(address erc20token, CurrencyDividends storage currencyDividends, uint256 userFrozen) internal {
+    function _processClaimErc20(address _to, address erc20token, CurrencyDividends storage currencyDividends, uint256 userFrozen) internal {
         if (currencyDividends.todayForClaim > 0) {
 
             //uint256 amount = SafeMath.div(SafeMath.mul(currencyDividends.todayForClaim, userFrozen), totalFrozenHxyToday);
             uint256 amount = getClaimAmount(currencyDividends.todayForClaim, userFrozen);
-            require(IERC20(erc20token).transfer(_msgSender(), amount), "fail in transfer HEX dividends");
+            require(IERC20(erc20token).transfer(_to, amount), "fail in transfer HEX dividends");
             currencyDividends.todayClaimed = SafeMath.add(currencyDividends.todayClaimed, amount);
         }
     }
 
-    function processClaimHex(uint256 userFrozen) internal {
-        _processClaimErc20(address(hexToken), hexDividends, userFrozen);
+    function processClaimHex(address _to, uint256 userFrozen) internal {
+        _processClaimErc20(_to, address(hexToken), hexDividends, userFrozen);
     }
 
-    function processClaimHxy(uint256 userFrozen) internal {
-        _processClaimErc20(address(hxyToken), hxyDividends, userFrozen);
+    function processClaimHxy(address _to, uint256 userFrozen) internal {
+        _processClaimErc20(_to, address(hxyToken), hxyDividends, userFrozen);
     }
 
-    function processClaimUsdc(uint256 userFrozen) internal {
-        _processClaimErc20(address(usdcToken), usdcDividends, userFrozen);
+    function processClaimUsdc(address _to, uint256 userFrozen) internal {
+        _processClaimErc20(_to, address(usdcToken), usdcDividends, userFrozen);
     }
 
 

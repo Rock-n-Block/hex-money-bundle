@@ -47,6 +47,7 @@ contract('exchange', accounts => {
 
     const eth = web3.utils.toWei('1', 'ether');
     const day = 86400;
+    const minimalFreezePeriod = new BN(7);
     //const day = 300;
 
     let now;
@@ -149,7 +150,6 @@ contract('exchange', accounts => {
         });
     });
 
-    /*
     it('#1 construct', async () => {
         hexExchangeHEX.address.should.have.length(42);
         await hexExchangeHEX.getHexTokenAddress().should.eventually.have.length(42);
@@ -157,6 +157,8 @@ contract('exchange', accounts => {
         (await hexExchangeHEX.getHexTokenAddress()).should.be.equal(hexToken.address);
         (await hexExchangeHEX.getHxyTokenAddress()).should.be.equal(hxyToken.address);
     });
+
+    /*
 
     it('#2 check base values', async () => {
         currentRate = await hxyToken.getCurrentHxyRate();
@@ -328,9 +330,35 @@ contract('exchange', accounts => {
         const hexBalanceTeamFirst = await hexToken.balanceOf(HXY_DIVIDENDS_TEAM_FIRST);
 
         hexBalanceTeamFirst.should.be.bignumber.equals(teamFirstAmount);
-
-
     })
+
+    it('#7.1 check dividends claim from another account', async () => {
+        const hexAmount = await hexExchangeHEX.getMaxAmount();
+        await hexToken.mint(BUYER_1, hexAmount.toString());
+        await hexToken.approve(hexExchangeHEX.address, hexAmount.toString(), {from: BUYER_1});
+        await hexExchangeHEX.exchangeHex(hexAmount.toString(), {from: BUYER_1}).should.not.be.rejected;
+
+        const hxyBalance = await hxyToken.balanceOf(BUYER_1);
+        await hxyToken.freezeHxy(hxyBalance.toString(), {from: BUYER_1}).should.not.be.rejected;
+
+        await increaseTime(day + 10);
+
+        const tokensReceived = await hexDividends.getTodayDividendsTotal();
+        tokensReceived[2].should.be.bignumber.equals(hexAmount);
+        const recordTime = await hexDividends.getRecordTime();
+        recordTime.should.be.bignumber.below(new BN(await getBlockchainTimestamp()));
+
+
+        await hexDividends.claimDividendsTo(BUYER_1, {from: BUYER_2}).should.not.be.rejected;
+
+        const hexBalanceAfter = await hexToken.balanceOf(BUYER_1);
+        hexBalanceAfter.should.be.bignumber.equals(hexAmount.mul(new BN(90)).div(new BN(100)));
+
+        const teamFirstAmount = hexAmount.div(new BN(10));
+        const hexBalanceTeamFirst = await hexToken.balanceOf(HXY_DIVIDENDS_TEAM_FIRST);
+        hexBalanceTeamFirst.should.be.bignumber.equals(teamFirstAmount);
+    })
+
 
     it('#8 check dividends with two claims', async () => {
         const hexAmount = await hexExchangeHEX.getMaxAmount();
@@ -357,13 +385,17 @@ contract('exchange', accounts => {
         const tokensReceived = await hexDividends.getTodayDividendsTotal();
         tokensReceived[2].should.be.bignumber.equals(hexAmount.mul(new BN(2)));
 
-        await hexDividends.claimDividends({from: BUYER_1}).should.not.be.rejected;
+        // const firstClaimTx = await hexDividends.claimDividends({from: BUYER_1}).should.not.be.rejected;
+        const firstClaimTx = await hexDividends.claimDividends({from: BUYER_1}).should.not.be.rejected;
         await increaseTime(20);
 
         const availableDivs = await hexDividends.getAvailableDividends(BUYER_2)
         availableDivs[2].should.be.bignumber.equals(expectedBalanceUsers);
 
-        await hexDividends.claimDividends({from: BUYER_2}).should.not.be.rejected;
+        // const secondClaimTx = await hexDividends.claimDividends({from: BUYER_2}).should.not.be.rejected;
+        const secondClaimTx = await hexDividends.claimDividends({from: BUYER_2}).should.not.be.rejected;
+        console.log('First claim gas: ' + firstClaimTx.receipt.gasUsed)
+        console.log('Second claim gas: ' + secondClaimTx.receipt.gasUsed)
 
         const hexBalanceAfterOne = await hexToken.balanceOf(BUYER_1);
         const hexBalanceAfterTwo = await hexToken.balanceOf(BUYER_1);
@@ -374,7 +406,7 @@ contract('exchange', accounts => {
         hexBalanceTeamFirst.should.be.bignumber.equals(expectedBalanceTeams);
     })
 
-        it('#9 check dividends with one unclaim', async () => {
+    it('#9 check dividends with one unclaim', async () => {
         const hexAmount = await hexExchangeHEX.getMaxAmount();
 
         await hexToken.mint(BUYER_1, hexAmount.toString());
@@ -517,6 +549,8 @@ contract('exchange', accounts => {
         hexBalanceTeamFirst.should.be.bignumber.equals(teamAmount);
     })
 
+    */
+
     it('#13 check freeze', async () => {
         const rate = await hxyToken.getCurrentHxyRate();
         const hexAmount = (await hxyToken.getRemainingHxyInRound()).mul(rate);
@@ -536,7 +570,8 @@ contract('exchange', accounts => {
         const freezeBalance = await hxyToken.freezingBalanceOf(BUYER_1)
         freezeBalance.should.be.bignumber.zero;
 
-        await hxyToken.freezeHxy(hxyBalance.toString(), {from: BUYER_1}).should.not.be.rejected;
+        const freezeTx = await hxyToken.freezeHxy(hxyBalance.toString(), {from: BUYER_1}).should.not.be.rejected;
+        console.log('Freeze gas: ' + freezeTx.receipt.gasUsed)
 
         const freezeBalanceAfter = await hxyToken.freezingBalanceOf(BUYER_1)
         freezeBalanceAfter.should.be.bignumber.equals(hxyBalance);
@@ -569,13 +604,12 @@ contract('exchange', accounts => {
         await timeTo(freezeTime +1);
 
         const userFreezings = await hxyToken.getUserFreezings(BUYER_1);
-        const freezeId = userFreezings[0];
-        const freezing = await hxyToken.getFreezingById(freezeId);
-        const freezeStart = freezing.startDate;
+        const freezingTime = userFreezings[0];
+        const freezing = await hxyToken.getFreezing(BUYER_1, freezingTime);
 
         const totalMintedBefore = await hxyToken.getTotalHxyMinted();
 
-        await hxyToken.releaseFrozen(freezeStart, {from: BUYER_1}).should.not.be.rejected;
+        await hxyToken.releaseFrozen(freezingTime, {from: BUYER_1}).should.not.be.rejected;
 
         const unfreezeBalance = await hxyToken.freezingBalanceOf(BUYER_1);
         unfreezeBalance.should.be.bignumber.zero;
@@ -591,16 +625,16 @@ contract('exchange', accounts => {
         freezeBalance.should.not.be.bignumber.zero;
 
         const userFreezings = await hxyToken.getUserFreezings(HXY_LOCKED_ADDRESS);
-        const freezeId = userFreezings[0];
-        const freezing = await hxyToken.getFreezingById(freezeId);
-        const freezeStart = freezing.startDate;
+        const freezingTime = userFreezings[0];
+        const freezing = await hxyToken.getFreezing(HXY_LOCKED_ADDRESS, freezingTime);
         const freezeDays = freezing.freezeDays;
+        console.log(freezeDays.toString());
 
-        const endFreezeTime = freezeStart.add(freezeDays.mul(new BN(day)).add(new BN(10)));
+        const endFreezeTime = freezingTime.add(freezeDays.mul(new BN(day)).add(new BN(10)));
         await timeTo(endFreezeTime);
 
         const freezeBalanceBefore = await hxyToken.freezingBalanceOf(HXY_LOCKED_ADDRESS);
-        await hxyToken.releaseFrozen(freezeStart, {from: HXY_LOCKED_ADDRESS}).should.not.be.rejected;
+        await hxyToken.releaseFrozen(freezingTime, {from: HXY_LOCKED_ADDRESS}).should.not.be.rejected;
 
         const freezeBalanceAfter = await hxyToken.freezingBalanceOf(HXY_LOCKED_ADDRESS);
 
@@ -637,31 +671,32 @@ contract('exchange', accounts => {
         await timeTo(freezeTime +1);
 
         const userFreezings = await hxyToken.getUserFreezings(BUYER_1);
-        const freezeId = userFreezings[0];
-        const freezing = await hxyToken.getFreezingById(freezeId);
-        const freezeStart = freezing.startDate;
+        console.log(userFreezings);
+        const freezingTime = userFreezings[0];
+        const freezing = await hxyToken.getFreezing(BUYER_1, freezingTime);
+        console.log(freezing);
 
         const freezeBalanceSecond = await hxyToken.freezingBalanceOf(BUYER_1);
 
-        await hxyToken.refreezeHxy(freezeStart, {from: BUYER_1}).should.not.be.rejected;
+        const refreezeTx = await hxyToken.refreezeHxy(freezingTime, {from: BUYER_1}).should.not.be.rejected;
+        console.log('Refreeze gas:', refreezeTx.receipt.gasUsed);
         const refreezeBalance = await hxyToken.freezingBalanceOf(BUYER_1);
         refreezeBalance.should.be.bignumber.above(freezeBalanceSecond)
 
         const userFreezingsAfter = await hxyToken.getUserFreezings(BUYER_1);
-        const newFreezeId = userFreezingsAfter[0];
+        console.log(userFreezingsAfter);
+        console.log(freezeBalanceSecond.toString())
+        console.log(refreezeBalance.toString())
+        const newFreezeTime = userFreezingsAfter[0];
 
+        newFreezeTime.should.not.be.equals(freezeTime);
+        const freezingAfter = await hxyToken.getFreezing(BUYER_1, newFreezeTime);
 
-        newFreezeId.should.not.be.equals(freezeId);
-        const freezingAfter = await hxyToken.getFreezingById(newFreezeId);
-        const freezeStartAfter = freezingAfter.startDate;
-
-        freezeStartAfter.should.be.bignumber.above(freezeStart);
         const latestFreezingAfter = await hxyToken.latestFreezeTimeOf(BUYER_1);
         latestFreezingAfter.should.be.bignumber.equals(new BN(await getBlockchainTimestamp()));
         latestFreezingAfter.should.be.bignumber.above(latestFreezing);
 
     })
-
 
     it('#16 check refreeze after refreeze', async () => {
         const rate = await hxyToken.getCurrentHxyRate();
@@ -729,6 +764,7 @@ contract('exchange', accounts => {
 
     })
 
+    /*
     it('#17 check buy with referral', async () => {
         const hexAmount = new BN(2 * 10 ** 11);
         const hxyAmount = new BN(10 ** 8);
@@ -738,7 +774,8 @@ contract('exchange', accounts => {
         hxyBalanceReferralBefore = await hxyToken.balanceOf(BUYER_3);
 
         await hexToken.approve(hexExchangeHEX.address, hexAmount, {from: BUYER_1});
-        await hexExchangeHEX.exchangeHexWithReferral(hexAmount.toString(), BUYER_3, {from: BUYER_1}).should.not.be.rejected;
+        const exchangeRefTx = await hexExchangeHEX.exchangeHexWithReferral(hexAmount.toString(), BUYER_3, {from: BUYER_1}).should.not.be.rejected;
+        console.log("Ref exchange gas: " + exchangeRefTx.receipt.gasUsed)
 
         const hexBalanceAfter = await hexToken.balanceOf(BUYER_1);
         hexBalanceAfter.should.be.bignumber.equals(hexBalanceBefore.sub(hexAmount));
@@ -752,7 +789,6 @@ contract('exchange', accounts => {
         hxyBalanceReferralAfter.should.be.bignumber.equals(expectedAmount);
 
         const refBalance = await hxyToken.balanceOf(referralSander.address);
-        console.log(refBalance.toString());
     });
 
     it('#18 check change referral percentage', async () => {
@@ -791,7 +827,6 @@ contract('exchange', accounts => {
         totalFrozen.should.be.bignumber.above(totalFrozenBefore);
     })
 
-     */
 
     it('#19 check referral release', async () => {
         const hexAmount = new BN(2 * 10 ** 11);
@@ -833,6 +868,8 @@ contract('exchange', accounts => {
         const hxyBalanceRefAfter = await hxyToken.balanceOf(referralSander.address);
         console.log(hxyBalanceRefAfter);
     });
+
+    */
 
 
 });

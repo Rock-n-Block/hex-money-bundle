@@ -145,33 +145,32 @@ contract HXY is ERC20FreezableCapped, HexMoneyTeam {
     }
 
     function freezeHxy(uint256 lockAmount) public {
-        freeze(_msgSender(), block.timestamp, MINIMAL_FREEZE_PERIOD, lockAmount);
+        freeze(_msgSender(), block.timestamp, lockAmount);
         totalFrozen = SafeMath.add(totalFrozen, lockAmount);
         totalCirculating = SafeMath.sub(totalCirculating, lockAmount);
     }
 
     function refreezeHxy(uint256 startDate) public {
         bytes32 freezeId = _toFreezeKey(_msgSender(), startDate);
-        Freezing memory userFreezing = freezings[freezeId];
+        
 
-        uint256 frozenTokens = userFreezing.freezeAmount;
-        uint256 interestDays = SafeMath.div(SafeMath.sub(block.timestamp, userFreezing.startDate), SECONDS_IN_DAY);
+        uint256 frozenTokens = freezingAmounts[freezeId];
+        uint256 interestDays = SafeMath.div(SafeMath.sub(block.timestamp, startDate), SECONDS_IN_DAY);
         uint256 interestAmount = SafeMath.mul(SafeMath.div(frozenTokens, 1000), interestDays);
 
-        refreeze(startDate, interestAmount);
+        refreeze(_msgSender(), startDate, interestAmount);
         totalFrozen = SafeMath.add(totalFrozen, interestAmount);
     }
 
     function releaseFrozen(uint256 _startDate) public {
         bytes32 freezeId = _toFreezeKey(_msgSender(), _startDate);
-        Freezing memory userFreezing = freezings[freezeId];
 
-        uint256 frozenTokens = userFreezing.freezeAmount;
+        uint256 frozenTokens = freezingAmounts[freezeId];
 
-        release(_startDate);
+        release(_msgSender(), _startDate);
 
         if (!_isLockedAddress()) {
-            uint256 interestDays = SafeMath.div(SafeMath.sub(block.timestamp, userFreezing.startDate), SECONDS_IN_DAY);
+            uint256 interestDays = SafeMath.div(SafeMath.sub(block.timestamp, _startDate), SECONDS_IN_DAY);
             uint256 interestAmount = SafeMath.mul(SafeMath.div(frozenTokens, 1000), interestDays);
             _mint(_msgSender(), interestAmount);
 

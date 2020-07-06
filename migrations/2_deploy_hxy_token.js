@@ -2,6 +2,7 @@ require('dotenv').config({ path: '../.env' })
 
 const HxyToken = artifacts.require('./token/HXY.sol');
 const HexWhitelist = artifacts.require('./whitelist/HexWhitelist.sol');
+const QueueLib = artifacts.require('./libs/QueueLib.sol');
 
 module.exports = async function (deployer, network, accounts) {
 
@@ -28,6 +29,7 @@ module.exports = async function (deployer, network, accounts) {
             UNLOCK_NINE_TIME,
             UNLOCK_TEN_TIME
         } = process.env
+
         console.log('Deploying HEX Money (HXY) Token');
         console.log('Deploy parameters:');
         console.log('  HEX Whitelist address: ', whitelist.address);

@@ -13,10 +13,17 @@ abstract contract ERC20FreezableCapped is ERC20, HexMoneyInternal {
     // freezing amounts for each chain
     //mapping (bytes32 => uint) internal freezings;
     mapping(bytes32 => Freezing) internal freezings;
+
+    mapping (bytes32 => uint256) internal freezingDays;
+    mapping (bytes32 => uint256) internal freezingAmounts;
+    mapping (bytes32 => bool) internal freezingCapitalized;
     // total freezing balance per address
     mapping (address => uint) internal freezingBalance;
 
-    mapping(address => bytes32[]) internal freezingsByUser;
+    // mapping(address => bytes32[]) internal freezingsByUser;
+    mapping(address => uint256[]) internal freezingsByUser;
+    mapping(address => bytes[]) internal freezingsPackedByUser;
+    // mapping (address => QueueLib.Queue) internal userFreezingQueue;
 
     mapping (address => uint256) internal latestFreezingTime;
 
@@ -77,48 +84,52 @@ abstract contract ERC20FreezableCapped is ERC20, HexMoneyInternal {
         return _cap;
     }
     
-    function getUserFreezings(address _user) public view returns (bytes32[] memory userFreezings) {
+    function getUserFreezings(address _user) public view returns (uint256[] memory userFreezings) {
         return freezingsByUser[_user];
     }
 
-    function getFreezingById(bytes32 freezingId)
+    // function getFreezingById(bytes32 freezingId)
+    //     public
+    //     view
+    //     returns (address user, uint256 startDate, uint256 freezeDays, uint256 freezeAmount, bool capitalized)
+    // {
+    //     Freezing memory userFreeze = freezings[freezingId];
+    //     user = userFreeze.user;
+     
+    //     startDate = userFreeze.startDate;
+    //     freezeDays = userFreeze.freezeDays;
+    //     freezeAmount = userFreeze.freezeAmount;
+    //     capitalized = userFreeze.capitalized;
+    // }
+
+    function getFreezing(address _user, uint256 _startDate)
         public
         view
-        returns (address user, uint256 startDate, uint256 freezeDays, uint256 freezeAmount, bool capitalized)
+        returns (uint256 freezeAmount, uint256 freezeDays, bool capitalized)
     {
-        Freezing memory userFreeze = freezings[freezingId];
-        user = userFreeze.user;
-        startDate = userFreeze.startDate;
-        freezeDays = userFreeze.freezeDays;
-        freezeAmount = userFreeze.freezeAmount;
-        capitalized = userFreeze.capitalized;
+        bytes32 freezeKey = _toFreezeKey(_user, _startDate);
+        freezeAmount = freezingAmounts[freezeKey];
+        uint256 daysFromId = freezingDays[freezeKey];
+        freezeDays = daysFromId != 0 ? daysFromId : MINIMAL_FREEZE_PERIOD;
+        capitalized = freezingCapitalized[freezeKey];
     }
 
 
-    function freeze(address _to, uint256 _start, uint256 _freezeDays, uint256 _amount) internal {
+    function freeze(address _to, uint256 _start, uint256 _amount) internal {
         require(_to != address(0x0), "FreezeContract: address cannot be zero");
         require(_start >= block.timestamp, "FreezeContract: start date cannot be in past");
-        require(_freezeDays >= 0, "FreezeContract: amount of freeze days cannot be zero");
-        require(_amount <= _balances[_msgSender()], "FreezeContract: freeze amount exceeds unfrozen balance");
-
-        Freezing memory userFreeze = Freezing({
-            user: _to,
-            startDate: _start,
-            freezeDays: _freezeDays,
-            freezeAmount: _amount,
-            capitalized: false
-        });
+        require(_amount <= _balances[_to], "FreezeContract: freeze amount exceeds unfrozen balance");
 
         bytes32 freezeId = _toFreezeKey(_to, _start);
+
+        freezingAmounts[freezeId] = _amount;
 
         _balances[_msgSender()] = _balances[_msgSender()].sub(_amount);
         freezingBalance[_to] = freezingBalance[_to].add(_amount);
 
-        freezings[freezeId] = userFreeze;
-        freezingsByUser[_to].push(freezeId);
-        latestFreezingTime[_to] = _start;
+        freezingsByUser[_to].push(_start);
 
-        emit Transfer(_msgSender(), _to, _amount);
+        emit Transfer(_to, _to, _amount);
         emit Freezed(_to, _start, _amount);
     }
 
@@ -127,89 +138,77 @@ abstract contract ERC20FreezableCapped is ERC20, HexMoneyInternal {
         require(_start >= block.timestamp, "FreezeContract: start date cannot be in past");
         require(_freezeDays >= 0, "FreezeContract: amount of freeze days cannot be zero");
 
-        Freezing memory userFreeze = Freezing({
-            user: _to,
-            startDate: _start,
-            freezeDays: _freezeDays,
-            freezeAmount: _amount,
-            capitalized: false
-        });
-
         bytes32 freezeId = _toFreezeKey(_to, _start);
+
+        freezingAmounts[freezeId] = _amount;
+        freezingDays[freezeId] = _freezeDays;
 
         freezingBalance[_to] = freezingBalance[_to].add(_amount);
 
-        freezings[freezeId] = userFreeze;
-        freezingsByUser[_to].push(freezeId);
-        latestFreezingTime[_to] = _start;
+        freezingsByUser[_to].push(_start);
 
         _totalSupply = _totalSupply.add(_amount);
 
-        emit Transfer(_msgSender(), _to, _amount);
+        emit Transfer(_to, _to, _amount);
         emit Freezed(_to, _start, _amount);
     }
 
-    function _toFreezeKey(address _user, uint256 _startDate) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(_user, _startDate));
+    function _toFreezeKey(address _to, uint256 _startDate) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(_to, _startDate));
     }
 
-    function release(uint256 _startTime) internal {
-        bytes32 freezeId = _toFreezeKey(_msgSender(), _startTime);
-        Freezing memory userFreeze = freezings[freezeId];
+    function release(address _to, uint256 _startTime) internal {
+        bytes32 freezeId = _toFreezeKey(_to, _startTime);
 
-        uint256 lockUntil = _daysToTimestampFrom(userFreeze.startDate, userFreeze.freezeDays);
+        uint256 daysFromId = freezingDays[freezeId];
+        uint256 frozenDays = daysFromId != 0 ? daysFromId : MINIMAL_FREEZE_PERIOD;
+        uint256 lockUntil = _daysToTimestampFrom(_startTime, frozenDays);
         require(block.timestamp >= lockUntil, "cannot release before lock");
 
-        uint256 amount = userFreeze.freezeAmount;
+        uint256 amount = freezingAmounts[freezeId];
 
-        _balances[_msgSender()] = _balances[_msgSender()].add(amount);
-        freezingBalance[_msgSender()] = freezingBalance[_msgSender()].sub(amount);
+        _balances[_to] = _balances[_to].add(amount);
+        freezingBalance[_to] = freezingBalance[_to].sub(amount);
 
-        _deleteFreezing(freezeId, freezingsByUser[_msgSender()]);
+        _deleteFreezing(_startTime, freezingsByUser[_to]);
 
-        emit Released(_msgSender(), amount);
+        emit Released(_to, amount);
     }
 
-    function refreeze(uint256 _startTime, uint256 addAmount) internal {
-        bytes32 freezeId = _toFreezeKey(_msgSender(), _startTime);
-        Freezing storage userFreeze = freezings[freezeId];
+    function refreeze(address _to, uint256 _startTime, uint256 addAmount) internal {
+
+        bytes32 prevFreezeId = _toFreezeKey(_to, _startTime);
+
+        bool isCapitalized = freezingCapitalized[prevFreezeId];
 
         uint256 lockUntil;
-        if (!userFreeze.capitalized) {
-            lockUntil = _daysToTimestampFrom(userFreeze.startDate, userFreeze.freezeDays);
+        if (!isCapitalized) {
+            lockUntil = _daysToTimestampFrom(_startTime, MINIMAL_FREEZE_PERIOD);
         } else {
-            lockUntil = _daysToTimestampFrom(userFreeze.startDate, 1);
+            lockUntil = _daysToTimestampFrom(_startTime, 1);
         }
 
         require(block.timestamp >= lockUntil, "cannot refreeze before lock");
 
-        bytes32 newFreezeId = _toFreezeKey(userFreeze.user, block.timestamp);
-        uint256 oldFreezeAmount = userFreeze.freezeAmount;
-        uint256 newFreezeAmount = SafeMath.add(userFreeze.freezeAmount, addAmount);
+        bytes32 newFreezeId = _toFreezeKey(_to, block.timestamp);
+        uint256 prevFreezeAmount = freezingAmounts[prevFreezeId];
+        uint256 newFreezeAmount = SafeMath.add(prevFreezeAmount, addAmount);
 
-        Freezing memory newFreeze = Freezing({
-            user: userFreeze.user,
-            startDate: block.timestamp,
-            freezeDays: userFreeze.freezeDays,
-            freezeAmount: newFreezeAmount,
-            capitalized: true
-        });
+        freezingAmounts[newFreezeId] = newFreezeAmount;
 
-        freezingBalance[_msgSender()] = freezingBalance[_msgSender()].add(addAmount);
+        freezingBalance[_to] = freezingBalance[_to].add(addAmount);
+        freezingsByUser[_to].push(block.timestamp);
 
-        freezings[newFreezeId] = newFreeze;
-        freezingsByUser[userFreeze.user].push(newFreezeId);
-        latestFreezingTime[userFreeze.user] = block.timestamp;
+        _deleteFreezing(_startTime, freezingsByUser[_to]);
 
-        _deleteFreezing(freezeId, freezingsByUser[_msgSender()]);
-        delete freezings[freezeId];
+        freezingCapitalized[newFreezeId] = true;
 
-        emit Released(_msgSender(), oldFreezeAmount);
-        emit Transfer(_msgSender(), _msgSender(), addAmount);
-        emit Freezed(_msgSender(), block.timestamp, newFreezeAmount);
+        emit Released(_to, prevFreezeAmount);
+        emit Transfer(_to, _to, addAmount);
+        emit Freezed(_to, block.timestamp, newFreezeAmount);
     }
 
-    function _deleteFreezing(bytes32 freezingId, bytes32[] storage userFreezings) internal {
+    function _deleteFreezing(uint256 freezingId, uint256[] storage userFreezings) internal {
         uint256 freezingIndex;
         bool freezingFound;
         for (uint256 i; i < userFreezings.length; i++) {
